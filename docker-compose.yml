@@ -1,0 +1,109 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  redis-ui:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-ui
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    restart: unless-stopped
+    environment:
+      SA_PASSWORD: "YourStrong@Pass123"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+      
+  exam-api:
+    container_name: exam-api
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: ExamService.API/Dockerfile
+    ports:
+      - "5001:8080"
+    depends_on:
+      - rabbitmq
+      - redis
+
+  result-api:
+    container_name: result-api
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Result.API/Dockerfile
+    ports:
+      - "5002:8080"
+    depends_on:
+      - rabbitmq
+      - redis
+    
+
+  order-api:
+    container_name: order-api
+    restart: unless-stopped
+    build:
+     context: .
+     dockerfile: Order.API/Dockerfile
+    ports:
+      - "5003:8080"
+    depends_on:
+      - redis
+      - rabbitmq
+
+  payment-api:
+    container_name: payment-api
+    restart: unless-stopped
+    build:
+     context: .
+     dockerfile: Payment.API/Dockerfile
+    ports:
+      - "5004:8080"
+    depends_on:
+      - redis
+      - rabbitmq
+
+  inventory-api:
+    container_name: inventory-api
+    restart: unless-stopped
+    build:  
+     context: .
+     dockerfile: Inventory.API/Dockerfile
+    ports:
+      - "5005:8080"
+    depends_on:
+      - redis
+      - rabbitmq
+
+volumes:
+  sql_data:
+  redis_data:
+  rabbitmq_data:

@@ -1,0 +1,332 @@
+Why Outbox Pattern Exists
+
+Problem scenario:
+
+Save Exam Result → DB success
+Publish Event → RabbitMQ fails
+
+Result:
+
+Other microservices never receive event
+
+System becomes inconsistent.
+
+5️⃣ Outbox Pattern Solution
+
+Instead of publishing immediately:
+
+1. Save business data
+2. Save event in Outbox table
+3. Commit transaction
+
+Later:
+
+Background service
+    ↓
+Reads Outbox table
+    ↓
+Publishes events to RabbitMQ
+
+Flow:
+
+Exam Evaluated
+      ↓
+Save ExamResult
+      ↓
+Save OutboxEvent
+      ↓
+Transaction Commit
+      ↓
+Background Worker
+      ↓
+Publish Integration Event
+      ↓
+RabbitMQ
+      ↓
+Other Microservices
+
+Domain Event with Integration Event
+========
+
+Controller
+   ↓
+Application Service
+   ↓
+Domain Entity
+   ↓
+Domain Event Raised
+   ↓
+Domain Event Dispatcher
+   ↓
+Handlers Execute
+   ↓
+Integration Event Stored (Outbox)
+   ↓
+DB Transaction Commit
+   ↓
+Background Worker
+   ↓
+Publish to RabbitMQ
+   ↓
+Other Microservices Consume
+
+
+
+With Outbox it becomes:
+
+Exam.API
+   ↓
+ExamEvaluatedDomainEvent
+   ↓
+Handler
+   ↓
+Save OutboxEvent
+   ↓
+OutboxProcessor
+   ↓
+RabbitMQ
+   ↓
+Result.API
+
+This is exact architecture used in large systems.
+
+
+Domain Event
+     ↓
+Handler
+     ↓
+Create Integration Event
+     ↓
+Save in Outbox
+
+Example
+
+ExamEvaluatedDomainEvent
+      ↓
+ExamEvaluatedIntegrationEvent
+
+ExamStartedDomainEvent
+ExamEvaluatedDomainEvent
+ExamSubmittedDomainEvent
+ProctoringViolationDomainEvent
+CandidateDisconnectedDomainEvent
+
+IDomainEventHandler<ExamStartedDomainEvent>
+IDomainEventHandler<ExamEvaluatedDomainEvent>
+IDomainEventHandler<ExamSubmittedDomainEvent>
+
+
+real word usage
+
+1️) Persist Additional Domain Data
+
+Often a domain event triggers additional database operations.
+
+Example: Save exam result history.
+
+Used for:
+
+Audit
+
+Analytics
+
+Reporting
+
+
+2) Publish Integration Event (Microservices Communication)
+
+Most common scenario.
+
+Domain event triggers integration event for other services.
+
+Example:
+
+Exam evaluated
+     ↓
+Notify Result Service
+
+
+This sends message to:
+
+RabbitMQ
+Kafka
+Azure Service Bus
+
+
+3️) Trigger Notification System
+
+Example:
+
+Candidate passed exam
+     ↓
+Send notification
+
+
+Notification may go to:
+
+Email
+
+SMS
+
+Push notification
+
+SignalR
+
+
+4️) Update Cache
+
+Large systems maintain cache layers.
+
+Example:
+
+Exam evaluated
+     ↓
+Update Redis leaderboard
+
+5️) Start Another Workflow
+
+Example:
+
+Exam completed
+    ↓
+Generate certificate
+
+
+6️) Audit Logging
+
+Highly required in enterprise compliance systems.
+
+
+
+
+Real Enterprise Example (Assessment System)
+
+Imagine your Proctoring Assessment Portal.
+
+Domain event:
+
+ExamEvaluatedDomainEvent
+
+Handlers may perform multiple actions:
+
+Handler 1 → Save result history
+Handler 2 → Publish integration event
+Handler 3 → Send candidate notification
+Handler 4 → Update leaderboard cache
+Handler 5 → Audit logging
+
+Event dispatcher triggers all handlers.
+
+Domain Event
+    ↓
+Handler1
+Handler2
+Handler3
+Handler4
+Handler5
+
+This is very powerful architecture.
+
+7️⃣ Why This Pattern Is Important
+
+Without domain events:
+
+Controller
+   ↓
+Service
+   ↓
+Repository
+   ↓
+Notification
+   ↓
+Cache
+   ↓
+RabbitMQ
+
+Everything becomes tightly coupled.
+
+With domain events:
+
+Domain Event
+   ↓
+Independent Handlers
+
+Each feature becomes loosely coupled.
+
+8️⃣ Production Rule
+
+Domain event handlers should:
+
+✔ Execute business side effects
+✔ Be small and focused
+✔ Be independent
+
+They should NOT:
+
+❌ Contain core business logic
+❌ Modify the same aggregate again
+❌ Create circular dependencies
+
+
+HTTP Request
+     │
+     ▼
+ExamController
+     │
+     ▼
+ExamService (Application Layer)
+     │
+     ▼
+Exam Aggregate (Domain Layer)
+     │
+     │ AddDomainEvent()
+     ▼
+Repository
+     │
+     ▼
+UnitOfWork.SaveChangesAsync()
+     │
+     ▼
+AppDbContext.SaveChangesAsync()
+     │
+     ▼
+DomainEventDispatcher
+     │
+     ├── SaveExamResultHandler
+     ├── NotifyStudentHandler
+     └── PublishIntegrationEventHandler
+     ▼
+RabbitMQ / Email / Analytics
+
+
+
+Controller
+   │
+   ▼
+ExamEvaluationService
+   │
+   ▼
+exam.Evaluate()
+   │
+   ▼
+ExamEvaluatedDomainEvent Added
+   │
+   ▼
+Repository.AddAsync()
+   │
+   ▼
+UnitOfWork.SaveChangesAsync()
+   │
+   ▼
+DbContext.SaveChanges()
+   │
+   ▼
+DomainEventDispatcher
+   │
+   ▼
+Handlers Execute
+
+
+Eventual consistency in .NET microservices is a distributed data model where services update their own data stores independently, 
+allowing temporary inconsistencies across the system. Instead of immediate locking, services synchronize asynchronously via events
+(e.g., RabbitMQ, Kafka) or sagas, ensuring all nodes converge to a consistent state over time. 

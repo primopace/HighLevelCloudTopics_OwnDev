@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option csharp_namespace = "Exam.Contracts.Protos";
+package result;
+service ResultGrpc
+{
+	rpc GenerateResult (ResultRequest)returns (ResultReply);
+}
+	message ResultRequest
+	{
+		int32 score = 1;
+	}
+	message ResultReply{
+		string grade = 1;
+		string remark =2;
+	}
+

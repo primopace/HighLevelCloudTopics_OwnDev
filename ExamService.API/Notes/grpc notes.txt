@@ -1,0 +1,842 @@
+gRPC was created by Google and is heavily adopted in .NET by Microsoft.
+HTTP/2 + Protobuf (binary)
+Compact binary payload
+5–10× faster
+Strong schema (.proto)
+Machine optimized(not like Api Human-readable)
+
+Assessment.API (REST for UI)
+        ↓
+Calls via gRPC
+        ↓
+ExamEngineService (evaluate answers)
+        ↓
+Calls via gRPC
+        ↓
+ProctoringService (AI / violations)
+
+REST is only at the edge.
+Inside → everything is gRPC.
+no need to follow this templace for grpc.the existing web api project itself it can be configure.
+if not proto file is not in add item open the notepad file and save as .proto.
+This template already enables:
+
+HTTP/2
+
+Kestrel gRPC pipeline
+
+Protobuf support
+
+
+This .proto file is the contract between services.
+
+<ItemGroup>
+  <Protobuf Include="Protos\exam.proto" GrpcServices="Both" />
+</ItemGroup>
+
+instead Both you can give Server or Client if required.Both is recommended for library
+
+
+This generates strongly typed client code/both code automatically.
+REST Call
+   ↓
+AssessmentService
+   ↓ gRPC (binary HTTP/2)
+ExamService
+   ↓
+Returns result
+
+JSON REST (edge only)
+        ↓
+Binary Protobuf
+        ↓
+HTTP/2 Multiplexing
+        ↓
+Zero serialization overhead
+        ↓
+High throughput microservices
+
+
+
+1️) Strong Contract (.proto)
+
+Like Swagger but compile-time enforced.
+
+2️) HTTP/2 Required
+
+gRPC uses multiplexed streams → very fast.
+
+3️) Binary Serialization (Protobuf)
+
+Payload size = 70% smaller than JSON.
+
+4️) Code Generation
+
+No manual DTO mapping.
+
+5️) Deadlines & Cancellation
+
+Enterprise resilience:
+
+await client.EvaluateAsync(request, deadline: DateTime.UtcNow.AddSeconds(3));
+
+6️) Streaming (Very Important Advanced Feature)
+
+| Type             | Use Case             |
+| ---------------- | -------------------- |
+| Unary            | Request/Response     |
+| Server Streaming | Live evaluation      |
+| Client Streaming | Upload answer batch  |
+| Bi-Directional   | Real-time AI scoring |
+
+Can We Test gRPC in Postman?
+
+Yes ✅ Modern versions of Postman support gRPC.
+
+Steps:
+
+1️) Open Postman
+2️) New → gRPC Request
+3️) Enter:
+
+localhost:7001
+
+4️) Load .proto file
+5️) Call ExamGrpc/Evaluate
+
+You can now test like REST — but using protobuf schema.
+
+| Scenario                    | Use     |
+| --------------------------- | ------- |
+| Angular / Blazor UI         | REST    |
+| Microservice ↔ Microservice | gRPC    |
+| Realtime UI                 | SignalR |
+| External public API         | REST    |
+| High-performance backend    | gRPC    |
+
+
+Frontend (Angular / Blazor)
+        ↓ REST
+API Gateway
+        ↓
+Assessment API
+        ↓ gRPC
+Exam Engine
+        ↓ gRPC
+AI / Proctoring / Scoring
+        ↓
+Database / Cache
+
+REST is just the “entry door”.
+gRPC is the actual engine room.
+
+| Layer                  | Technology |
+| ---------------------- | ---------- |
+| User realtime          | SignalR    |
+| Public APIs            | REST       |
+| Internal microservices | gRPC       |
+
+
+Instead they:
+
+👉 Pack this as internal NuGet package
+dotnet pack Exam.Contracts
+
+Push to:
+
+Azure Artifacts
+
+GitHub Packages
+
+Nexus
+
+Artifactory
+
+Then services install:
+
+dotnet add package Exam.Contracts
+
+
+API Gateway does NOT handle gRPC between services.
+
+Gateway is for external traffic only.
+
+Client (Angular / Blazor)
+        ↓
+API Gateway (YARP / Envoy / Nginx)
+        ↓ REST
+AssessmentService
+        ↓ gRPC (internal only)
+ExamService
+
+
+Gateway never sees internal gRPC calls.
+
+
+Production Level Behavior in Kubernetes
+
+Inside cluster:
+
+Instead of:
+    o.Address = new Uri("https://localhost:7001");
+
+
+This is identical to Kubernetes DNS later:
+
+https://examservice.default.svc.cluster.local
+
+
+Kubernetes DNS resolves it automatically.
+
+Each service scales independently:
+
+exam-api  (3 pods)
+result-api (2 pods)
+
+gRPC load balances automatically.
+
+
+1️) Service Discovery (instead of hard URL)
+
+Use:
+
+Consul
+
+Kubernetes DNS
+
+Dapr
+
+Example later becomes:
+
+o.Address = new Uri("http://examservice");
+
+
+2)mTLS Between Services (Zero Trust Security)
+
+gRPC supports certificate-based auth:
+
+Assessment → Exam
+Verified via certificate, not JWT.
+
+3)Deadlines + Retries (Critical in Production)
+var options = new CallOptions(deadline: DateTime.UtcNow.AddSeconds(2));
+
+await _client.EvaluateAsync(request, options);
+
+4)Observability (OpenTelemetry)
+(
+gRPC integrates with tracing:
+
+RequestId flows across services automatically.
+)
+
+src/
+ ├── Gateways/
+ ├── Services/
+ │     ├── AssessmentService
+ │     ├── ExamService
+ │
+ ├── Contracts/
+ │     └── Exam.Contracts   ← shared proto package
+ │
+ ├── BuildingBlocks/
+ │     └── Observability / Resilience
+
+
+
+build the service-will auto-generate files(.cs) (you won’t see them directly, they are in the obj folder).
+These are strongly typed classes created from the proto.
+
+ExamGrpcBase → came from proto generation
+ExamRequest → came from proto generation
+ExamReply → came from proto generation
+ExamGrpcClient for client need
+
+exam.proto
+   ↓ (Grpc.Tools)
+Code Generator ran
+   ↓
+C# classes generated in /obj
+   ↓
+Your service inherits those classes
+
+This is why gRPC is called contract-first development.
+
+
+
+proto file defines:
+
+Service methods
+
+Request model
+
+Response model
+
+Serialization format
+
+Client code generation
+
+That’s why enterprise teams version-control .proto very strictly.
+
+
+Proto file Explanation
+syntax = "proto3";
+
+We are using Protocol Buffers v3 (standard for all modern gRPC apps).
+
+
+define its namespace .because .net will not providing namespace for it
+option csharp_namespace = "ExamService.gRPC.Protos";
+
+So in your service implementation takes the required class from this namespace
+
+package exam;
+
+Logical grouping inside protobuf world.
+It does NOT affect your .NET namespace — only protobuf identity.
+
+
+service ExamGrpc
+
+This defines your gRPC service (like a Controller in REST).
+
+rpc Evaluate
+
+Defines a method:Equivalent REST would be:POST /evaluate
+But here it's binary RPC.
+
+message ExamRequest
+
+Defines request contract (like DTO).
+
+Numbers (= 1, = 2, = 3) are field identifiers used in binary encoding.
+Never change them after production (important versioning rule).
+
+message ExamReply
+
+Response returned to calling microservice.
+
+Rest->Controller → Action → DTO → JSON → HTTP
+
+gRPC->.proto Contract → Generated C# Classes → Service Implementation → Binary HTTP/2
+
+ExamGrpcService : ExamGrpcBase
+================
+You are implementing the contract defined in .proto.
+
+This guarantees:
+✔ You cannot change method signature
+✔ All services follow same schema
+✔ No mismatch between services
+
+ServerCallContext-This contains runtime metadata:
+
+Headers
+
+Auth token
+
+Deadline / timeout
+
+Cancellation
+
+Client info
+
+gRPC is designed for high-performance async IO.
+
+It never blocks threads.
+
+Even if logic is simple, gRPC requires async pattern for scalability (thousands of calls/sec).
+
+AssessmentService (client)
+     ↓ sends protobuf binary
+HTTP/2 request
+     ↓
+Kestrel receives stream
+     ↓
+gRPC middleware reads .proto contract
+     ↓
+Finds matching service: ExamGrpc
+     ↓
+Creates ExamRequest object automatically
+     ↓
+Calls your method Evaluate()
+     ↓
+You return ExamReply
+     ↓
+Framework serializes to protobuf binary
+     ↓
+Sent back over HTTP/2 stream
+
+REST request:JSON serialize → parse → map → allocate → validate
+gRPC request:Binary decode directly into struct (zero reflection)
+That’s why companies use gRPC internally.
+
+Grpc.Net.Client	-Lets this service CALL gRPC
+Google.Protobuf-	Handles binary serialization
+Grpc.Tools-	Generates C# client from .proto
+
+Both services must agree — otherwise communication fails.-so proto need both
+
+Register gRPC Client in Dependency Injection-builder.Services.AddGrpcClient
+This registers a typed gRPC client into DI container.
+the registered reusable client that knows:
+Where the gRPC server lives
+How to serialize protobuf
+How to open HTTP/2 connection
+---
+
+
+Both services MUST share the same .proto definition.
+
+
+Option 2 (Production — Used in Enterprises)
+
+They create a Shared Contract Package:
+
+Exam.Contracts (NuGet Package) currently we are using as shared class library
+        ↓
+Used by all services
+
+So services don’t depend on each other directly.
+
+
+
+C# Object
+  ↓ serialize
+PROTOBUF Binary
+  ↓ send via HTTP/2
+ExamService
+  ↓ deserialize
+C# Object
+  ↓ execute method
+Return Binary Response
+
+⚡ This is why gRPC is 10x faster than REST.
+
+
+So companies create a separate contract project:
+
+Exam.Contracts  (contains exam.proto)
+       ▲
+       │
+ ┌───────────────┐
+ │               │
+ExamService   AssessmentService
+
+This becomes a NuGet package shared across services.
+
+
+2️⃣ mTLS Between Services (Zero Trust Security)
+
+gRPC supports certificate-based auth:
+
+Assessment → Exam
+Verified via certificate, not JWT.
+
+Used in banking / healthcare systems.
+
+
+gRPC uses HTTP/2 persistent connection.
+
+Instead of closing after first response, the same socket stays open:
+
+AssessmentService → calls ExamService  (ONLY ONCE)
+
+ExamService → sends response #1 (progress)
+ExamService → sends response #2 (progress)
+ExamService → sends response #3 (progress)
+ExamService → sends response #4 (final)
+
+Connection closes AFTER stream ends ✅
+Keep listening...
+Whenever ExamService pushes something → process it immediately.
+
+ExamService processes:
+
+✔ Checking answers…
+✔ Applying negative marking…
+✔ Running plagiarism scan…
+✔ Calculating percentile…
+✔ Final score ready.
+
+Each step is pushed instantly — no waiting.
+
+
+
+You covered:
+
+✔ Contract-first design
+✔ Unary calls
+✔ Server streaming
+✔ Bidirectional streaming
+✔ Service isolation via Contracts project
+✔ REST → gRPC translation pattern
+
+
+bidectional
+==
+AssessmentService opens persistent gRPC stream
+        ↓
+Student activity pushed continuously
+        ↓
+ExamService evaluates events in real-time
+        ↓
+Immediate enforcement responses returned
+
+
+Mode	        Direction	 Use Case
+Unary	        1 → 1	    Submit exam
+Server Stream	1 → Many	Evaluation progress
+Client Stream	Many → 1	Bulk upload
+Bidirectional	Many ⇄ Many	Live monitoring
+
+
+
+
+What is gRPC Streaming?
+
+Unlike REST (1 request → 1 response), gRPC allows continuous data flow over one connection.
+
+| Type             | Direction   | Real Assessment Use Case      |
+| ---------------- | ----------- | ----------------------------- |
+| Unary            | 1 → 1       | Submit exam (you already did) |
+| Server Streaming | 1 → Many    | Live evaluation updates       |
+| Client Streaming | Many → 1    | Upload answers batch          |
+| Bidirectional    | Many ↔ Many | Real-time AI proctoring       |
+
+We’ll implement Server Streaming first (most common in real systems).
+
+
+Scenario We’ll Build
+
+When a student submits an exam:
+
+AssessmentService calls ExamService via gRPC streaming.
+
+Instead of waiting for one final result, ExamService sends:
+
+✔ Evaluating Q1...
+✔ Evaluating Q2...
+✔ Evaluating Q3...
+✔ Calculating Score...
+✔ Final Result: PASS
+
+This is exactly how:
+
+AI evaluation engines work
+
+Document processing pipelines work
+
+ML scoring services work
+
+✅ STEP 1 — Update .proto Contract
+Build Exam.Contracts → this regenerates client/server code automatically.
+
+✅ STEP 2 — Implement Streaming in ExamService
+Instead of returning once:
+
+responseStream.WriteAsync()
+responseStream.WriteAsync()
+responseStream.WriteAsync()
+
+Each call pushes data immediately to the client.
+
+Connection stays open.
+
+✅ STEP 3 — Consume Streaming in AssessmentService
+IAsyncEnumerable<T>  ← async streaming iterator
+
+
+STEP 4 — Expose This via REST (Gateway Pattern)
+
+Your UI cannot call gRPC directly, so AssessmentService translates it.
+
+This converts:
+gRPC Streaming → HTTP Streaming → UI
+
+✅ STEP 5 — Run Both Services
+
+You’ll see response arriving progressively:
+
+10% - Evaluating Question 1
+20% - Evaluating Question 2
+30% - Evaluating Question 3
+...
+100% - Final Result: PASS
+
+Not buffered.
+Live streamed.
+
+Enterprise-Level Flow (What Just Happened)
+
+Assessment API
+   ↓ REST request
+AssessmentService
+   ↓ gRPC Streaming
+ExamService
+   ↓ continuous processing
+AssessmentService relays stream
+   ↓
+Client receives progressive output
+
+This is used in:
+
+AI evaluation engines
+
+Video processing
+
+Fraud detection
+
+Large-scale grading
+
+ML inference pipelines
+
+Why gRPC Streaming is So Powerful
+
+| Feature                     | REST   | gRPC Streaming |
+| --------------------------- | ------ | -------------- |
+| Wait for completion         | Yes    | ❌              |
+| Live progress               | Hard   | Native         |
+| Connection reuse            | No     | Yes            |
+| High throughput             | Medium | Very High      |
+| Real-time backend pipelines | ❌      | ✅              |
+
+When You Should Use Streaming
+
+Use it when:
+
+✔ Processing takes time
+✔ You need progress feedback
+✔ You want high-throughput pipelines
+✔ Large payload chunking
+✔ AI / analytics workloads
+
+Do NOT use streaming for simple CRUD.
+
+You Now Covered All gRPC Communication Types
+
+
+| Type             | Status                       |
+| ---------------- | ---------------------------- |
+| Unary            | ✅ Done earlier               |
+| Server Streaming | ✅ Now                        |
+| Client Streaming | (Next if needed)             |
+| Bidirectional    | (Advanced real-time backend) |
+
+Bidirectional gRPC Streaming
+=====
+This allows:
+Client sends data continuously  ⇄  Server responds continuously
+No waiting. Both sides talk simultaneously over one connection.
+
+Real Assessment Scenario (Why Bidirectional?)
+
+In an online proctored exam:
+
+Browser keeps sending events:
+
+Webcam snapshot analyzed
+
+Tab switch detected
+
+Face not visible
+
+Answer submitted
+
+Backend AI / Exam Engine responds instantly:
+
+Warning issued
+
+Flag raised
+
+Score adjusted
+
+Session terminated
+
+This is NOT request/response — it’s a live conversation.
+
+✅ STEP 1 — Update Contract (exam.proto)
+✅ STEP 2 — Implement Server Logic (ExamService)
+
+What’s Happening Here?
+
+requestStream → client is continuously sending events
+
+responseStream → server reacts instantly
+
+Loop never blocks — it's fully asynchronous.
+
+This is a live socket conversation.
+
+STEP 3 — Consume Bidirectional Stream (AssessmentService)
+STEP 4 — Expose an API Endpoint to Trigger Session
+
+STEP 5 — Run Both Services
+
+Call:
+
+GET https://localhost:5001/api/assessment/live-session
+
+Console Output:
+
+SERVER: ACK - Answer received
+SERVER: WARNING - Do not switch tabs!
+SERVER: FLAG - Face not visible
+
+Enterprise Execution Flow
+AssessmentService opens persistent gRPC stream
+        ↓
+Student activity pushed continuously
+        ↓
+ExamService evaluates events in real-time
+        ↓
+Immediate enforcement responses returned
+
+This is used in:
+
+Proctoring engines
+
+Trading systems
+
+Multiplayer collaboration backends
+
+IoT telemetry pipelines
+
+AI inference streaming
+
+Production Add-Ons (Important)
+
+In real deployments you also add:
+
+Deadlines
+var deadline = DateTime.UtcNow.AddSeconds(10);
+_client.LiveSession(deadline: deadline);
+Cancellation (student disconnect)
+context.CancellationToken
+Load balancing
+
+Handled by Kubernetes automatically.
+
+Observability
+
+Streaming spans traced via OpenTelemetry.
+
+You covered:
+
+✔ Contract-first design
+✔ Unary calls
+✔ Server streaming
+✔ Bidirectional streaming
+✔ Service isolation via Contracts project
+✔ REST → gRPC translation pattern
+
+
+Each service:
+
+Own DB
+
+Own deployment
+
+Own scaling
+
+Own version
+
+This is true microservice autonomy.
+
+Kubernetes handles:
+
+Load balancing
+
+Retry routing
+
+Pod discovery
+
+No code change required.
+
+API Gateway is ONLY for north–south traffic (UI → system)
+
+It NEVER participates in internal gRPC.
+
+Production-Level Flow with API Gateway
+
+Browser
+  ↓ HTTPS
+API Gateway (YARP / Envoy / Nginx)
+  ↓ REST
+AssessmentService
+  ↓ gRPC (cluster internal)
+ExamService
+  ↓ gRPC
+ResultService
+  ↓
+Database
+
+
+Why We Do NOT Route gRPC Through Gateway
+
+Because:
+
+Adds latency
+
+Breaks streaming
+
+Violates microservice isolation
+
+Hard to scale
+
+Gateways handle:
+✔ Authentication
+✔ Rate limiting
+✔ Routing
+✔ TLS termination
+
+Multiple API Gateways in Enterprise?
+
+Yes — very common.
+
+Example:
+
+Public Gateway        → external users
+Partner Gateway       → integrations
+Admin Gateway         → backoffice
+Internal Gateway      → service mesh edge
+
+Each optimized differently.
+
+
+
+VERY IMPORTANT (Avoid Circular Call Loop)
+
+If:
+
+Exam.API → calls Result.API
+Result.API → calls Exam.API
+Exam.API → calls Result.API again
+
+You will create:
+
+Infinite recursion
+Stack overflow
+Timeout
+
+In real enterprise systems we avoid this by:
+
+Clear service ownership
+
+No circular dependencies
+
+Using Orchestrator pattern if needed
+
+
+Enterprise Best Practice
+
+Instead of bidirectional circular calls means :
+
+We usually use:
+
+API → Service A → Service B → Service C
+
+NOT:
+
+A ↔ B ↔ A means parent to child again child to parent in a same call
+

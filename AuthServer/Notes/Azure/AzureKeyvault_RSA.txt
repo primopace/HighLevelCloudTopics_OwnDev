@@ -1,0 +1,182 @@
+🧠 Key concept (clear confusion once and for all)
+Item	Where
+Private key	Azure Key Vault 🔐
+Public key	IdentityServer JWKS endpoint
+JWT signing	IdentityServer asks Key Vault to sign
+JWT validation	APIs use public key from JWKS
+
+👉 Private key NEVER leaves Key Vault
+
+Step 1 — Create signing key in Azure Key Vault
+Option A: RSA Key (recommended)
+az keyvault key create \
+  --vault-name my-auth-kv \
+  --name auth-signing-key \
+  --kty RSA \
+  --size 2048
+
+
+This creates:
+
+Private key 🔐 (non-exportable)
+
+Public key (derivable)
+
+Permissions required
+
+Your AuthServer App (Managed Identity / App Registration) needs:
+
+Permission	Reason
+Key → Sign	Sign JWTs
+Key → Get	Load key metadata
+Key → Verify	Optional
+Step 2 — Add Azure Key Vault packages
+dotnet add package Azure.Identity
+dotnet add package Azure.Security.KeyVault.Keys
+dotnet add package Duende.IdentityServer
+
+Step 3 — Load Key Vault signing key
+
+Create SigningCredential loader
+
+using Azure.Identity;
+using Azure.Security.KeyVault.Keys;
+using Microsoft.IdentityModel.Tokens;
+using Duende.IdentityServer.Models;
+
+public static class KeyVaultSigningCredential
+{
+    public static SigningCredentials Create(
+        string keyVaultUrl,
+        string keyName)
+    {
+        var credential = new DefaultAzureCredential();
+
+        var keyClient = new KeyClient(
+            new Uri(keyVaultUrl),
+            credential);
+
+        var key = keyClient.GetKey(keyName);
+
+        var rsa = key.Value.Key.ToRSA();
+
+        var securityKey = new RsaSecurityKey(rsa)
+        {
+            KeyId = key.Value.Properties.Version
+        };
+
+        return new SigningCredentials(
+            securityKey,
+            SecurityAlgorithms.RsaSha256);
+    }
+}
+
+Step 4 — Replace signing config in Program.cs
+❌ Remove (DEV ONLY)
+// .AddDeveloperSigningCredential()
+
+✅ Replace with Key Vault signing
+var keyVaultUrl = builder.Configuration["KeyVault:Url"];
+var signingKeyName = builder.Configuration["KeyVault:SigningKeyName"];
+
+var signingCredentials =
+    KeyVaultSigningCredential.Create(keyVaultUrl, signingKeyName);
+
+builder.Services
+    .AddIdentityServer(options =>
+    {
+        options.Events.RaiseErrorEvents = true;
+        options.Events.RaiseFailureEvents = true;
+    })
+    .AddAspNetIdentity<ApplicationUser>()
+    .AddConfigurationStore(...)
+    .AddOperationalStore(...)
+    .AddSigningCredential(signingCredentials);
+
+Step 5 — appsettings.json
+"KeyVault": {
+  "Url": "https://my-auth-kv.vault.azure.net/",
+  "SigningKeyName": "auth-signing-key"
+}
+
+Step 6 — What changes after this?
+🔁 What stays the SAME
+
+✔ /connect/authorize
+✔ /connect/token
+✔ Refresh tokens
+✔ Blazor code
+✔ API JWT validation
+
+🔐 What changes internally
+
+Before:
+
+IdentityServer → local dev RSA key
+
+
+After:
+
+IdentityServer → Azure Key Vault → RSA Sign → JWT
+
+Step 7 — JWKS & API verification (important)
+
+Your APIs DO NOT talk to Key Vault
+
+They do:
+
+GET https://auth/.well-known/openid-configuration/jwks
+
+
+Which contains:
+
+{
+  "kid": "v2",
+  "kty": "RSA",
+  "n": "...",
+  "e": "AQAB"
+}
+
+
+✔ API caches keys
+✔ Matches JWT kid
+✔ Validates signature
+
+Step 8 — Key rotation (zero downtime)
+
+Azure:
+
+az keyvault key create --vault-name my-auth-kv --name auth-signing-key
+
+
+IdentityServer:
+
+Picks newest key
+
+Publishes old + new public keys
+
+Signs new tokens with new key
+
+APIs:
+
+Continue validating old tokens
+
+Accept new tokens automatically
+
+✅ Zero downtime
+✅ Zero redeploys
+✅ Enterprise-grade
+
+FINAL ARCHITECTURE (mental model)
+Blazor SPA
+   ↓
+IdentityServer
+   ├── Auth cookies
+   ├── Tokens (JWT)
+   ├── Refresh tokens (SQL)
+   └── Signing → Azure Key Vault 🔐
+             ↓
+         Private RSA Key
+
+Protected APIs
+   └── Validate JWT via JWKS (public key)

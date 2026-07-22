@@ -1,0 +1,34 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/AssessmentService/">
+    <Project Path="Assessment.Application/Assessment.Application.csproj" Id="a91f7a87-79f0-46ab-8956-3d0fe45ba5bf" />
+    <Project Path="Assessment.Domain/Assessment.Domain.csproj" Id="d6d2ce98-476a-44ed-a757-204200032ba3" />
+    <Project Path="Assessment.Infrastructure/Assessment.Infrastructure.csproj" Id="6b1b4548-1250-4da0-9695-c7bf70c427f5" />
+    <Project Path="Assessment.Shared/Assessment.Shared.csproj" Id="f73de640-84c7-4e32-8837-92a72f8baffc" />
+    <Project Path="AssessmentAPI/Assessment.API.csproj" />
+  </Folder>
+  <Folder Name="/src/ExamService/">
+    <Project Path="Exam.Domain/Exam.Domain.csproj" Id="d1059be5-b824-4b77-8acd-192cf26f6683" />
+    <Project Path="ExamService.API/Exam.API.csproj" Id="abac85e2-5a93-4e8a-9569-c2559af12639" />
+  </Folder>
+  <Folder Name="/src/InventoryService/">
+    <Project Path="Inventory.API/Inventory.API.csproj" Id="716d94d0-961e-4623-b159-d60689af88d3" />
+  </Folder>
+  <Folder Name="/src/OrderSagaService/">
+    <Project Path="OrderSaga.API/OrderSaga.API.csproj" Id="ac638632-7791-4b88-a0ea-5133a278d93e" />
+  </Folder>
+  <Folder Name="/src/OrderService/">
+    <Project Path="Order.API/Order.API.csproj" Id="2271ab22-594a-431b-a37f-5ace88fee62e" />
+  </Folder>
+  <Folder Name="/src/PaymentService/">
+    <Project Path="Payment.API/Payment.API.csproj" Id="6d5bc75c-15c6-4c1a-a40e-c3daf9d1ac60" />
+  </Folder>
+  <Folder Name="/src/ResultService/">
+    <Project Path="Result.API/Result.API.csproj" Id="3766d378-5507-454a-a7e6-f2ab133f666a" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="BuildingBlocks/BuildingBlocks.csproj" Id="c0e43042-6d88-481b-a97f-f135d6cb5021" />
+    <Project Path="Contracts/Contracts.csproj" Id="46c964d4-92cd-422f-89b6-e2131e193db3" />
+    <Project Path="Exam.Contracts/Exam.Contracts.csproj" Id="ff90f710-1093-4c46-972c-d5927890ff9a" />
+  </Folder>
+</Solution>

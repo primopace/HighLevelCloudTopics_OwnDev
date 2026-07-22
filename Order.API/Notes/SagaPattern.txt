@@ -1,0 +1,1069 @@
+
+event-choreography
+==============
+Client
+  ↓
+OrderService
+  Create Order (PendingPayment)
+  Publish OrderPlacedEvent
+        ↓
+PaymentService
+  Process Payment
+     ├─ Success → PaymentCompletedEvent
+     └─ Fail → PaymentFailedEvent
+        ↓
+InventoryService
+  Reserve Inventory
+        ↓
+InventoryReservedEvent
+        ↓
+OrderService
+  Update Order = Completed
+
+
+  Failure case:
+
+OrderPlacedEvent
+     ↓
+PaymentFailedEvent
+     ↓
+OrderService
+Update Order = Cancelled
+
+This is compensation transaction.
+
+
+OrderService
+   ↓
+OrderPlacedEvent
+   ↓
+PaymentService
+   ↓
+PaymentCompletedEvent
+   ↓
+InventoryService
+   ↓
+InventoryReservedEvent
+   ↓
+OrderService
+Update Order = Completed
+
+
+RabbitMQ Topology
+Exchange: OrderPlaced
+Queue: payment-service
+
+Exchange: PaymentCompleted
+Queue: inventory-service
+
+Exchange: PaymentFailed
+Queue: order-service
+
+MassTransit auto-creates these.
+
+
+State Machine
+===============
+
+
+
+
+
+🧠 Why Saga State Machine?
+
+Your previous implementation was event-choreography:
+
+OrderService → PaymentService → InventoryService
+
+Problem:
+
+No central state tracking
+
+Hard to debug
+
+Hard to retry
+
+Difficult to monitor
+
+Enterprise systems use Saga Orchestration.
+
+Client
+  ↓
+OrderPlaced
+  ↓
+Saga Orchestrator
+  ↓
+PaymentService
+  ↓
+InventoryService
+  ↓
+Order Completed
+
+Saga keeps a distributed transaction state.
+
+SagaSolution
+│
+├── BuildingBlocks.Events
+│
+├── OrderService
+│
+├── PaymentService
+│
+├── InventoryService
+│
+└── OrderSagaService   👈 NEW
+
+
+Saga becomes the orchestrator.
+
+
+🏆 What You Have Built
+
+You now understand:
+
+✅ Domain Events
+✅ Integration Events
+✅ RabbitMQ Messaging
+✅ Outbox Pattern
+✅ Event Choreography
+✅ Saga Orchestration
+✅ Distributed Transactions
+✅ Compensation Pattern
+✅ Eventual Consistency
+✅Event Driven Architecture
+✅Saga Pattern
+✅Microservice orchestration
+
+This is true enterprise microservice architecture.
+Client
+ ↓
+OrderPlacedEvent
+ ↓
+Saga State Machine
+ ↓
+PaymentRequestEvent
+ ↓
+PaymentService
+ ↓
+PaymentCompletedEvent
+ ↓
+Saga
+ ↓
+ReserveInventoryEvent
+ ↓
+InventoryService
+ ↓
+InventoryReservedEvent
+ ↓
+Saga Finalized
+
+(Most companies create a shared messaging configuration library:
+
+BuildingBlocks.Messaging
+
+So all services reuse:
+
+services.AddRabbitMqMessaging();)
+
+
+1️) Idempotent Consumers
+
+Prevent duplicate message processing.
+
+2️) Saga State Machine
+
+Track distributed transaction state.
+
+
+
+1️⃣ Complete Saga Event Flow (Production Sequence)
+
+Below is the orchestrated Saga flow for your Order → Payment → Inventory example.
+
+Client
+  │
+  │ HTTP Request
+  ▼
+OrderService
+  │
+  │ Insert Order (Status = PendingPayment)
+  │
+  │ Publish OrderPlacedEvent
+  ▼
+RabbitMQ
+  ▼
+OrderSagaService
+  │
+  │ Create SagaState
+  │
+  │ Publish PaymentRequestEvent
+  ▼
+RabbitMQ
+  ▼
+PaymentService
+  │
+  │ Process Payment
+  │
+  ├── success
+  │       │
+  │       └── Publish PaymentCompletedEvent
+  │
+  └── failure
+          │
+          └── Publish PaymentFailedEvent
+               ▼
+RabbitMQ
+  ▼
+OrderSagaService
+  │
+  ├── If PaymentCompleted
+  │        │
+  │        └── Publish ReserveInventoryEvent
+  │
+  └── If PaymentFailed
+           │
+           └── Publish CancelOrderEvent
+                ▼
+RabbitMQ
+  ▼
+InventoryService
+  │
+  │ Reserve Inventory
+  │
+  └── Publish InventoryReservedEvent
+       ▼
+RabbitMQ
+  ▼
+OrderSagaService
+  │
+  │ Saga Completed
+  │
+  └── Publish CompleteOrderEvent
+       ▼
+RabbitMQ
+  ▼
+OrderService
+  │
+  └── Update Order Status = Completed
+
+  This is true distributed transaction orchestration.
+
+
+  2️) Failure Scenario (Compensation)
+
+  OrderPlaced
+    ↓
+PaymentRequest
+    ↓
+PaymentFailed
+    ↓
+Saga triggers CancelOrder
+    ↓
+OrderService
+Update Order Status = Cancelled
+
+❌ We do not delete data
+✅ We change state
+
+This is called compensating transactions.
+
+
+Saga Database
+OrderSagaStates
+--------------------------------
+CorrelationId
+CurrentState
+OrderId
+PaymentStatus
+InventoryStatus
+CreatedAt
+
+Example:
+
+CorrelationId: 55c8
+CurrentState: InventoryProcessing
+OrderId: 101
+PaymentStatus: Completed
+InventoryStatus: Pending
+
+This table allows tracking the distributed workflow.
+
+4️) Production Folder Structure
+
+This is a clean architecture microservice layout.
+
+
+SagaSolution
+│
+├── BuildingBlocks
+│     │
+│     ├── Events(IntegrationEvents)
+│     │      OrderPlacedEvent.cs
+│     │      PaymentCompletedEvent.cs
+│     │      PaymentFailedEvent.cs
+│     │      InventoryReservedEvent.cs
+│     │
+│     └── Messaging
+│            MassTransitConfiguration.cs
+│
+│
+├── OrderService
+│     │
+│     ├── Domain
+│     │      Order.cs
+│     │
+│     ├── Application
+│     │      Commands
+│     │      DTOs
+│     │
+│     ├── Infrastructure
+│     │      OrderDbContext.cs
+│     │
+│     ├── Consumers
+│     │      CompleteOrderConsumer.cs
+│     │      CancelOrderConsumer.cs
+│     │
+│     └── Controllers
+│            OrdersController.cs
+│
+│
+├── PaymentService
+│     │
+│     ├── Domain
+│     │      Payment.cs
+│     │
+│     ├── Infrastructure
+│     │      PaymentDbContext.cs
+│     │
+│     └── Consumers
+│            PaymentRequestConsumer.cs
+│
+│
+├── InventoryService
+│     │
+│     ├── Domain
+│     │      InventoryReservation.cs
+│     │
+│     ├── Infrastructure
+│     │      InventoryDbContext.cs
+│     │
+│     └── Consumers
+│            ReserveInventoryConsumer.cs
+│
+│
+└── OrderSagaService
+      │
+      ├── Saga
+      │      OrderSagaState.cs
+      │      OrderSagaStateMachine.cs
+      │
+      ├── Infrastructure
+      │      SagaDbContext.cs
+      │
+      └── Configuration -----program cs publisher and consumer registration file
+             MassTransitConfig.cs
+
+5️) RabbitMQ Topology
+
+With RabbitMQ and MassTransit, the exchanges and queues are created automatically.
+
+Conceptually:
+Exchange: OrderPlaced
+Queue: OrderSagaService
+
+Exchange: PaymentRequest
+Queue: PaymentService
+
+Exchange: PaymentCompleted
+Queue: OrderSagaService
+
+Exchange: ReserveInventory
+Queue: InventoryService
+
+Exchange: InventoryReserved
+Queue: OrderSagaService
+
+Benifits of using seperate service - large scale companies
+==========
+
+OrderSagaService responsibilities
+
+listens to events
+
+controls the workflow
+
+maintains saga state
+
+publishes next commands/events
+
+| Benefit               | Explanation                            |
+| --------------------- | -------------------------------------- |
+| Central orchestration | One place controls workflow            |
+| Observability         | Easy to track distributed transactions |
+| Isolation             | Saga failures don't break services     |
+| Scalability           | Saga can scale independently           |
+
+Saga Inside OrderService (Also Common) Saga state machine lives inside OrderService.Saga state machine lives inside OrderService.
+
+✅ Create a separate OrderSagaService
+
+Because it teaches:
+
+true orchestration
+
+distributed transaction tracking
+
+scalable workflow control
+
+In production systems Saga service usually also includes:
+SagaService
+├── SagaStateMachine
+├── SagaRepository
+├── RetryPolicies
+├── DeadLetterQueues
+├── IdempotentInbox
+└── Monitoring
+
+This makes it the transaction coordinator of the microservice ecosystem.
+
+
+
+we can handle duplicate events with Idempotent Consumers
+(using Inbox Pattern + Deduplication Table).
+
+we can bring the outbox pattern also here -it is my opinion lets confirm it
+
+if you want Saga state to persist in a database, then you must use Entity Framework
+dotnet add package MassTransit
+dotnet add package MassTransit.RabbitMQ
+dotnet add package MassTransit.EntityFrameworkCore
+dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+dotnet add package Microsoft.EntityFrameworkCore.Design or tools(mostly)
+
+
+(1)Plain EF Core DbContext
+But you must manually ensure:
+
+CorrelationId mapping
+
+concurrency control
+
+saga table configuration
+
+So it’s more manual work.
+
+2)MassTransit SagaDbContext
+
+already configures:
+
+CorrelationId
+
+concurrency
+
+saga locking
+
+table mapping
+
+So you only define custom properties.
+
+Reason:
+
+MassTransit internally expects:
+
+saga repository
+
+concurrency tokens
+
+correlation configuration
+
+And the SagaDbContext base class handles this.
+
+Saga
+ ↓
+MassTransit.EntityFrameworkCore
+ ↓
+SagaDbContext
+ ↓
+EF Core
+ ↓
+Database
+
+MassTransit manages saga persistence.
+
+2️) Load balancing
+
+If you run multiple instances of PaymentService:
+
+PaymentService Instance 1
+PaymentService Instance 2
+PaymentService Instance 3
+
+Queue distributes messages:
+
+msg1 → instance1
+msg2 → instance2
+msg3 → instance3
+
+This allows horizontal scaling.
+
+
+6️⃣ Message Acknowledgment (Important Detail)
+
+Consumer must acknowledge message:
+
+ACK
+
+Example flow:
+
+Queue
+-----
+msg1
+msg2
+msg3
+
+Consumer receives msg1.
+
+If processing succeeds:
+
+ACK
+
+RabbitMQ removes msg1 from queue.
+
+Then consumer receives msg2.
+
+If processing fails:
+
+NACK
+
+RabbitMQ may:
+
+Retry message
+Requeue message
+Send to dead-letter queue
+
+What Happens If Consumer Crashes
+
+Example:
+
+msg1 delivered
+consumer crashed
+
+RabbitMQ detects no ACK and:
+
+msg1 returned to queue
+
+Another consumer will process it.
+
+This guarantees message reliability.
+
+Exchange: OrderPlacedEvent
+        │
+        ├── payment-queue
+        └── inventory-queue
+
+
+payment-queue
+-------------
+msg1
+msg2
+msg3
+
+inventory-queue
+---------------
+msg1
+msg2
+msg3
+
+Each service processes its own queue.
+
+
+Publisher
+   │
+   ▼
+Exchange (OrderPlacedEvent)
+   │
+   ├───────────────┐
+   ▼               ▼
+payment-queue   inventory-queue
+   │               │
+   ▼               ▼
+PaymentService   InventoryService
+
+
+
+Exchange: payment-completed
+Queue: payment-completed-consumer
+Binding: exchange → queue
+
+             ┌────────────────────────┐
+                        │      OrderService      │
+                        │   Publish OrderPlaced  │
+                        └────────────┬───────────┘
+                                     │
+                                     ▼
+                         Exchange: OrderPlacedEvent
+                                     │
+                                     ▼
+                              Queue: order-saga
+                                     │
+                                     ▼
+                         OrderSagaStateMachine
+                                     │
+                                     │ Publish PaymentRequestEvent
+                                     ▼
+                       Exchange: PaymentRequestEvent
+                                     │
+                                     ▼
+                     Queue: payment-request-consumer
+                                     │
+                                     ▼
+                             PaymentService
+                                     │
+                        Publish PaymentCompletedEvent
+                                     ▼
+                     Exchange: PaymentCompletedEvent
+                                     │
+                                     ▼
+                              Queue: order-saga
+                                     │
+                                     ▼
+                         OrderSagaStateMachine
+                                     │
+                       Publish ReserveInventoryEvent
+                                     ▼
+                    Exchange: ReserveInventoryEvent
+                                     │
+                                     ▼
+                 Queue: reserve-inventory-consumer
+                                     │
+                                     ▼
+                           InventoryService
+                                     │
+                     Publish InventoryReservedEvent
+                                     ▼
+                    Exchange: InventoryReservedEvent
+                                     │
+                                     ▼
+                              Queue: order-saga
+                                     │
+                                     ▼
+                         OrderSagaStateMachine
+                                     │
+                       Publish CompleteOrderEvent
+                                     ▼
+                     Exchange: CompleteOrderEvent
+                                     │
+                                     ▼
+                Queue: complete-order-consumer
+                                     │
+                                     ▼
+                             OrderService
+Exchange
+Queue
+Binding
+Error Queue
+Retry Queue
+
+Events & Commands Used in the System
+
+| Message                  | Type    | Publisher        | Consumer            |
+| ------------------------ | ------- | ---------------- | ------------------- |
+| `OrderPlacedEvent`       | Event   | OrderService     | Saga                |
+| `PaymentRequestEvent`    | Command | Saga             | PaymentService      |
+| `PaymentCompletedEvent`  | Event   | PaymentService   | Saga                |
+| `PaymentFailedEvent`     | Event   | PaymentService   | Saga                |
+| `ReserveInventoryEvent`  | Command | Saga             | InventoryService    |
+| `InventoryReservedEvent` | Event   | InventoryService | Saga + OrderService |
+| `InventoryFailedEvent`   | Event   | InventoryService | Saga                |
+
+Commands (requests) → issued by Saga to services
+
+Events (responses) → published by services back to Saga
+
+
+
+| Line                                 | Purpose                      |
+| ------------------------------------ | ---------------------------- |
+| `InstanceState(x => x.CurrentState)` | Where saga state is stored   |
+| `Event(() => OrderPlaced)`           | Register event type          |
+| `CorrelateById`                      | Map event to saga instance   |
+| `OrderId`                            | Used as saga correlation key |
+
+Two major issues always exist in event-driven systems:
+
+1️⃣ Duplicate Messages
+2️⃣ Message Failures
+
+We solve them using:
+
+Inbox Pattern (Idempotent Consumer)
+
+Retry Policies
+
+Dead Letter Queues (DLQ)
+
+Let's implement them in a production-safe way.
+
+
+
+Dead Letter Queue (DLQ)
+
+If retries fail, the message moves to a Dead Letter Queue.
+
+RabbitMQ automatically creates:
+
+queue_name_error
+
+Example:
+
+payment-service_error
+
+Messages that fail permanently land here.
+
+Inspect DLQ in RabbitMQ
+  Queues
+--------------------------------
+payment-service
+payment-service_error
+inventory-service
+inventory-service_error
+
+The _error queues are DLQ.
+
+DLQ → re-publish → normal queue
+
+MassTransit also supports retry scheduling.
+Production teams usually do by monitoring the rabbitmq
+
+Typical Production Observability Stack
+
+Most companies combine:
+
+| Tool              | Purpose         |
+| ----------------- | --------------- |
+| **OpenTelemetry** | instrumentation |
+| **Jaeger**        | traces          |
+| **Prometheus**    | metrics         |
+| **Grafana**       | dashboards      |
+| **Elastic Stack** | logs            |
+
+
+| Tool          | License       | Production Usage  | Notes                       |
+| ------------- | ------------- | ----------------- | --------------------------- |
+| OpenTelemetry | Apache 2.0    | ✅ Fully free      | CNCF project                |
+| Jaeger        | Apache 2.0    | ✅ Free            | CNCF tracing backend        |
+| Prometheus    | Apache 2.0    | ✅ Free            | Most popular metrics system |
+| Grafana       | AGPL / OSS    | ✅ Free            | Enterprise version paid     |
+| Elastic Stack | Mixed license | ⚠️ Partially free | Some features paid          |
+
+
+Many companies instead use:
+
+Grafana + Loki instead of Elastic.
+
+
+Run Jaeger in Docker
+
+Add this container.
+
+docker run -d \
+  --name jaeger \
+  -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  -p 4318:4318 \
+  jaegertracing/all-in-one:latest
+
+
+  dotnet add package OpenTelemetry
+dotnet add package OpenTelemetry.Extensions.Hosting
+dotnet add package OpenTelemetry.Exporter.OpenTelemetryProtocol
+dotnet add package OpenTelemetry.Instrumentation.AspNetCore
+dotnet add package OpenTelemetry.Instrumentation.Http
+dotnet add package OpenTelemetry.Instrumentation.EntityFrameworkCore
+
+
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracerProviderBuilder =>
+    {
+        tracerProviderBuilder
+            .SetResourceBuilder(
+                ResourceBuilder.CreateDefault()
+                .AddService("OrderService"))
+
+            .AddAspNetCoreInstrumentation()
+
+            .AddHttpClientInstrumentation()
+
+            .AddEntityFrameworkCoreInstrumentation()
+
+            .AddOtlpExporter(o =>
+            {
+                o.Endpoint = new Uri("http://localhost:4317");
+            });
+    });
+
+
+    Are They Deployed Separately?
+
+Yes. In production they run as separate containers/services.
+
+Typical architecture:
+
+    Microservices
+     │
+     ▼
+OpenTelemetry SDK
+     │
+     ▼
+OpenTelemetry Collector
+     │
+ ┌───────────────┬───────────────┬───────────────┐
+ ▼               ▼               ▼
+Jaeger         Prometheus       Loki / Elastic
+(Tracing)      (Metrics)        (Logs)
+     │               │               │
+     └──────► Grafana Dashboards ◄──┘
+
+
+
+
+     Containers
+--------------------------------
+order-service
+payment-service
+inventory-service
+
+rabbitmq
+
+otel-collector
+
+jaeger
+prometheus
+grafana
+loki (or elasticsearch)
+
+
+1️⃣ OpenTelemetry
+
+Instrumentation standard.
+
+Example:
+
+Track HTTP request
+Track DB query
+Track RabbitMQ publish
+Track consumer execution
+2️⃣ Jaeger
+
+Stores distributed traces.
+
+Example trace:
+
+API Request
+   ↓
+OrderService
+   ↓
+Saga
+   ↓
+PaymentService
+   ↓
+InventoryService
+3️⃣ Prometheus
+
+Collects metrics like:
+
+request_count
+cpu_usage
+memory_usage
+rabbitmq_queue_size
+4️⃣ Grafana
+
+Visualization dashboard.
+
+Example dashboards:
+
+API latency
+error rate
+queue size
+consumer lag
+5️⃣ Elastic Stack
+
+Centralized logging.
+
+Stores logs like:
+
+INFO OrderCreated
+ERROR PaymentFailed
+WARN InventoryLow
+
+
+7️⃣ Why OpenTelemetry Is the Future
+
+Almost all companies are moving to OpenTelemetry because it unifies:
+
+Traces
+Metrics
+Logs
+
+before OpenTelemetry we had separate systems.
+
+Now everything flows through one telemetry pipeline.
+
+
+On Amazon Web Services:
+
+Example:
+
+EC2 instance (t3.large)
+--------------------------------
+Docker containers:
+order-service
+payment-service
+inventory-service
+rabbitmq
+prometheus
+grafana
+jaeger
+
+
+
+Microservice Communication
+====
+Option 1 — Synchronous API call
+OrderService
+   ↓ HTTP
+PaymentService
+
+Pros:
+
+simple
+
+immediate response
+
+Cons:
+
+tight coupling
+
+cascading failures
+
+Option 2 — Event-driven Saga (Recommended)
+OrderPlacedEvent
+   ↓
+PaymentService
+   ↓
+PaymentCompletedEvent
+
+Pros:
+
+loosely coupled
+
+resilient
+
+scalable
+
+Cons:
+
+eventual consistency
+
+less important 
+=====
+
+1️⃣ What Event Sourcing Changes
+
+Traditional system (current):
+
+Orders Table
+----------------
+Id
+CustomerId
+Amount
+Status
+
+With Event Sourcing, we do not store the state directly.
+
+Instead we store events.
+
+OrderEvents
+----------------
+EventId
+AggregateId (OrderId)
+EventType
+EventData
+CreatedAt
+Version   ---event versioning
+
+Example stored events:
+
+OrderCreated
+PaymentCompleted
+InventoryReserved
+OrderCompleted
+
+Order state is reconstructed from events.
+
+
+
+use seperate tables OrderEvents to track the history of events from ordercreated to order completed
+
+
+CreateOrderCommand
+      ↓
+OrderAggregate
+      ↓
+OrderCreatedEvent
+      ↓
+EventStore
+      ↓
+Publish OrderPlacedEvent
+      ↓
+Saga
+      ↓
+PaymentService
+      ↓
+PaymentCompletedEvent
+      ↓
+Consumer
+      ↓
+Append EventStore
+      ↓
+Replay events
+      ↓
+Apply()
+      ↓
+State updated
+
+
+
+Event Versioning is mainly used when your event schema changes over time, especially in systems using Event Sourcing or distributed microservices. It helps you evolve events without breaking old data or consumers.
+
+Since you are building CQRS + Event Sourcing + Saga, event versioning becomes very important.
+
+1️⃣ The Core Problem Event Versioning Solves
+
+In Event Sourcing, events are stored forever.
+
+Example stored events:
+
+OrderCreatedEvent v1
+OrderCreatedEvent v1
+OrderCreatedEvent v1
+
+After 1 year you change the event:
+
+OrderCreatedEvent v2
+
+Now your event store contains:
+
+OrderCreatedEvent v1
+OrderCreatedEvent v2
+
+Your system must still read the old events.
+
+Without versioning:
+
+❌ Event deserialization fails
+❌ Replay breaks
+❌ Read models break
+
+Event versioning solves this.

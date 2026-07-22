@@ -1,0 +1,108 @@
+1️⃣ ASP.NET Identity + DB users
+2️⃣ Refresh token flow
+3️⃣ Role & policy-based authorization
+4️⃣ React + IdentityServer login
+5️⃣ Microservices + scopes
+6️⃣ Assessment / Proctoring role design
+
+
+1️⃣ Generate token via Postman
+2️⃣ Add ASP.NET Identity (users in DB)
+3️⃣ Secure your existing API
+4️⃣ Add roles & policies
+5️⃣ React login flow
+
+
+1️⃣ Call protected API using Bearer token
+2️⃣ Add refresh tokens
+3️⃣ Add ASP.NET Identity users
+4️⃣ Replace password grant (deprecated)
+5️⃣ Add roles & policies
+
+
+1️⃣ Call your protected API with this token
+2️⃣ Add roles & [Authorize(Roles="Admin")]
+3️⃣ Replace password flow with Authorization Code
+4️⃣ Connect real DB users (ASP.NET Identity)
+5️⃣ Assessment / Proctoring role & policy design
+
+
+
+Choose what to do next 👇
+
+👉 3️⃣ Replace password flow with Authorization Code + PKCE (BEST PRACTICE)
+👉 4️⃣ Connect real DB users (ASP.NET Identity)
+👉 5️⃣ Assessment / Proctoring role & policy design (domain-level)
+
+
+
+3️⃣ Replace password flow with Authorization Code + PKCE
+4️⃣ Connect real DB users (ASP.NET Identity)
+5️⃣ Assessment / Proctoring full auth design
+
+
+
+3️⃣ Replace password flow with Authorization Code + PKCE
+
+Authorization Code + PKCE flow (secure login like Google/Microsoft)
+
+
+3️⃣ Authorization Code Flow (browser-based, real-world)
+4️⃣ ASP.NET Identity + DB users
+5️⃣ Proctoring roles & policies (Invigilator / Candidate / Admin)
+
+IdentityDB → connect ASP.NET Identity (real users)
+RefreshToken → long sessions without re-login
+ReactAuth → full React login integration
+ProctorDesign → real exam/proctor policy model
+
+
+RefreshToken → silent re-login
+IdentityUsers → real DB users
+MicroScopes → multiple APIs
+TokenSecurity → secure storage & rotation
+
+1️⃣ EF migrations (3 DbContexts)
+2️⃣ Seeding clients/scopes
+3️⃣ Admin management strategy
+4️⃣ React login integration
+5️⃣ Azure Key Vault signing
+6️⃣ Multi-tenant readiness
+
+👉 If you want, next I’ll show:
+
+Exact migration commands
+
+Azure Key Vault config
+
+React + PKCE best practice
+
+How big orgs rotate secrets without downtime
+
+
+1️⃣ Seed clients & scopes from code (one-time)
+2️⃣ Build Admin UI for IdentityServer
+3️⃣ Replace DeveloperSigningCredential with Azure Key Vault
+4️⃣ React login (PKCE best practice)
+5️⃣ Role-based & policy-based authorization
+6️⃣ Microservices JWT validation
+7️⃣ Proctoring / Assessment role model
+
+1️⃣ Seed initial clients & scopes into DB
+2️⃣ Verify token issuance from DB
+3️⃣ Replace DeveloperSigningCredential (prod)
+4️⃣ Connect React app (PKCE)
+5️⃣ Role & policy authorization
+6️⃣ Proctoring / Assessment RBAC model
+
+A️⃣ Admin UI for managing clients & scopes
+B️⃣ Production signing keys (Azure Key Vault)
+C️⃣ Role & policy model (Assessment + Proctoring)
+D️⃣ Microservices + scopes (real-world design)
+E️⃣ Token security, rotation & breach protection
+
+1️⃣ MFA before exam start
+2️⃣ Proctor live monitoring security
+3️⃣ Token revocation & logout propagation
+4️⃣ Admin UI for managing users / roles
+5️⃣ Azure deployment (App Service + SQL + Key Vault)

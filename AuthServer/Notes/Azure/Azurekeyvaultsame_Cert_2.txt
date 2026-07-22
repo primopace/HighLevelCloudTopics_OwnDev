@@ -1,0 +1,173 @@
+✅ Correct industry pattern (VERY IMPORTANT)
+There are two valid Key Vault approaches
+Option	Use case
+🔐 Certificate (recommended)	IdentityServer signing
+🔑 Key + CryptoClient	Advanced / custom signing
+
+👉 Duende officially recommends CERTIFICATES
+Not raw Key Vault keys.
+
+✅ ✅ RECOMMENDED: Key Vault Certificate approach
+Step 1: Create certificate in Key Vault
+az keyvault certificate create \
+  --vault-name my-auth-kv \
+  --name auth-signing-cert \
+  --policy "$(az keyvault certificate get-default-policy)"
+
+
+This creates:
+
+Private key (non-exportable)
+
+Public key
+
+Managed rotation support
+
+Step 2: Packages (correct)
+dotnet add package Azure.Identity
+dotnet add package Azure.Security.KeyVault.Certificates
+dotnet add package Microsoft.IdentityModel.Tokens
+
+Step 3: Load cert from Key Vault (CORRECT CODE)
+using Azure.Identity;
+using Azure.Security.KeyVault.Certificates;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Cryptography.X509Certificates;
+
+public static class KeyVaultCertificateLoader
+{
+    public static X509Certificate2 Load(
+        string vaultUrl,
+        string certName)
+    {
+        var client = new CertificateClient(
+            new Uri(vaultUrl),
+            new DefaultAzureCredential());
+
+        var cert = client.GetCertificate(certName);
+
+        return new X509Certificate2(
+            cert.Value.Cer);
+    }
+}
+
+Step 4: Plug into IdentityServer
+var cert = KeyVaultCertificateLoader.Load(
+    builder.Configuration["KeyVault:Url"],
+    builder.Configuration["KeyVault:SigningCertName"]);
+
+builder.Services
+    .AddIdentityServer()
+    .AddSigningCredential(cert);
+
+
+✅ This is exactly how production systems do it
+
+🔑 What happens internally (important mental model)
+Token creation
+JWT payload
+   ↓
+IdentityServer
+   ↓
+Private key (inside Key Vault)
+   ↓
+JWT signed (RS256)
+
+
+✔ Private key never leaves Key Vault
+
+Token validation (APIs)
+API receives token
+   ↓
+Reads header (kid)
+   ↓
+Calls JWKS (cached)
+   ↓
+Uses PUBLIC KEY
+   ↓
+Signature verified
+
+
+👉 APIs never talk to Key Vault
+
+🌍 JWKS endpoint still works automatically
+GET /.well-known/openid-configuration/jwks
+
+
+IdentityServer:
+
+Extracts public key from cert
+
+Publishes it
+
+Includes kid
+
+Supports rotation
+
+🔁 Key rotation (zero downtime)
+
+When Key Vault rotates cert:
+
+Component	Behavior
+IdentityServer	Signs with new private key
+JWKS	Publishes old + new public keys
+APIs	Validate both
+Tokens	Seamless
+
+✔ No redeploy
+✔ No outage
+✔ No code change
+
+❓ Should you use az keyvault key create instead?
+❌ NOT recommended for IdentityServer
+
+Why?
+
+Duende doesn’t natively integrate with CryptoClient
+
+You’d be implementing signing logic manually
+
+Certificate path is battle-tested
+
+✅ Final recommendation (follow THIS)
+
+✔ Use Key Vault Certificates
+✔ Use X509Certificate2
+✔ Use .AddSigningCredential(cert)
+✔ Let IdentityServer manage JWKS
+✔ Let Key Vault protect private key
+
+
+
+
+
+
+What is REALLY happening when you call LoadCertificate(...)
+
+When you do something like:
+
+var cert = KeyVaultCertificateLoader.LoadCertificate(keyVaultUrl, certName);
+
+✔️ What you get in code
+
+An X509Certificate2 handle
+
+Public key + certificate metadata
+
+A reference to the private key
+
+❌ What you do NOT get
+
+The private key material
+
+The raw RSA key bytes
+
+Ability to export the private key
+
+
+
+IdentityServer
+ └─ "Sign this payload"
+     └─ Azure Key Vault / HSM
+         └─ Uses private key internally
+         └─ Returns signature

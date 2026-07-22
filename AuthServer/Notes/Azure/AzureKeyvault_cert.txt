@@ -1,0 +1,185 @@
+
+
+
+[ Blazor WASM ]
+      |
+      v
+[ AuthServer (App Service) ]
+      |
+      v
+[ Azure Key Vault ]
+      |
+      v
+[ SQL Server (Config + Users + Grants) ]
+
+Key ---Type---	Use
+RSA	-JWT signing (recommended)
+ECDSA-	Optional (advanced)
+X509 Certificate-	BEST PRACTICE ⭐
+
+Certificate based signing token
+
+STEP 1)Create certificate (Azure)
+az keyvault certificate create \
+  --vault-name my-auth-kv \
+  --name auth-signing-cert \
+  --policy "$(az keyvault certificate get-default-policy)"
+
+  This creates:
+
+private key 🔐
+
+certificate 📜
+
+rotation support 🔄
+
+
+STEP 2️) Grant AuthServer access
+
+Your AuthServer App Service needs:
+
+Key Vault Certificate: GET
+Key Vault Secret: GET
+Key Vault Key: SIGN
+
+Using:
+
+Managed Identity (preferred)
+
+OR Service Principal
+
+
+STEP 3️⃣ Install packages
+dotnet add package Azure.Identity
+dotnet add package Azure.Security.KeyVault.Certificates
+dotnet add package Azure.Security.KeyVault.Secrets
+
+
+
+STEP 4️⃣ Load cert from Key Vault
+using Azure.Identity;
+using Azure.Security.KeyVault.Certificates;
+using Azure.Security.KeyVault.Secrets;
+using System.Security.Cryptography.X509Certificates;
+
+static X509Certificate2 LoadCertificate(
+    string keyVaultUrl,
+    string certName)
+{
+    var credential = new DefaultAzureCredential();
+
+    var certClient = new CertificateClient(
+        new Uri(keyVaultUrl),
+        credential);
+
+    var secretClient = new SecretClient(
+        new Uri(keyVaultUrl),
+        credential);
+
+    var cert = certClient.GetCertificate(certName);
+    var secret = secretClient.GetSecret(certName);
+
+    var privateKeyBytes = Convert.FromBase64String(secret.Value.Value);
+
+    return new X509Certificate2(
+        privateKeyBytes,
+        (string?)null,
+        X509KeyStorageFlags.MachineKeySet |
+        X509KeyStorageFlags.EphemeralKeySet);
+}
+
+step 5)
+
+var cert = LoadCertificate(
+    builder.Configuration["KeyVault:Url"],
+    builder.Configuration["KeyVault:SigningCertName"]);
+
+builder.Services
+    .AddIdentityServer()
+    .AddSigningCredential(cert);
+
+    appsettings.json
+    ============
+    "KeyVault": {
+  "Url": "https://my-auth-kv.vault.azure.net/",
+  "SigningCertName": "auth-signing-cert"
+}
+
+
+STEP 6️⃣ Enable key rotation (enterprise gold)
+
+Azure rotates cert → IdentityServer picks up new key → zero downtime
+
+IdentityServer automatically publishes:
+
+/.well-known/openid-configuration/jwks
+
+
+APIs validate tokens without change
+
+
+
+
+What this unlocks immediately
+
+✔ Multiple AuthServer instances
+✔ Horizontal scaling
+✔ Zero-downtime deployments
+✔ SOC2 / ISO / HIPAA compliance
+✔ Secure token validation
+
+Publish all public keys (JWKS)
+{
+  "keys": [
+    { "kid": "v2-thumbprint", ... }, --old 
+    { "kid": "v1-thumbprint", ... }---new
+  ]
+}
+
+
+Key Vault
+ ├── cert v1 (active)
+ ├── cert v2 (active)
+       ↓
+ IdentityServer
+ ├── signs with v2
+ ├── exposes JWKS v1 + v2
+       ↓
+ APIs
+ ├── cache JWKS
+ ├── validate using kid
+
+
+ ✅ When CAN we remove old private key?
+
+After ALL tokens signed by it are guaranteed expired
+
+Safe removal formula:
+Max Access Token Lifetime
++ Clock skew
++ JWKS cache time
+--------------------------------
+= Safe key removal time
+
+
+Example:
+
+Access token: 15 min
+
+JWKS cache: 24 hrs
+
+Clock skew: 5 min
+
+👉 Remove old key after ~24 hours
+
+
+Client sends refresh_token
+        ↓
+IdentityServer validates refresh token from DB
+        ↓
+IdentityServer issues:
+   - NEW access token
+   - NEW refresh token (if rotation enabled)
+⚠️ The NEW access token is signed with the CURRENT active private key
+
+✔️ Even if the refresh token was issued months ago

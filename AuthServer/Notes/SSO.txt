@@ -1,0 +1,50 @@
+2️⃣ MULTI-APP SSO
+
+You have:
+
+Blazor Admin
+
+React Assessment
+
+Maybe Mobile App
+
+All using same IdentityServer.
+
+How It Works
+
+User logs into App A
+→ IdentityServer sets auth cookie
+→ App B redirects to IdentityServer
+→ Cookie exists
+→ No login page
+→ Direct redirect back
+
+That is true SSO.
+
+No extra code required. Just same Authority
+
+
+
+
+
+
+
+If you later have:
+
+Assessment App
+
+Exam App
+
+Reporting App
+
+Admin Portal
+
+All using the same IdentityServer
+
+Then:
+
+Login once
+
+All apps auto-authenticate
+
+That is real SSO.

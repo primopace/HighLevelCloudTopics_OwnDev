@@ -1,0 +1,388 @@
+Identity server JWT notes
+Algorithm:RS256 (RSA + SHA-256)
+That means:
+kid-key identifier get in both public key jwks endpoint and jwt json 
+Asymmetric cryptography
+
+Private key → signs the token
+
+Public key → API verifies the token
+HttpContext.User.Identity.IsAuthenticated = true;Cookie authentication middleware(app.UseAuthentication());IdentityServer checks cookie,YES → skip login,NO  → show login page
+actually cookies are going along with the request so identity server decide to reuse and authenticated internaly.not our api code doing,
+In production:
+
+Users should NOT see login page every time
+
+SSO behavior is desired
+
+Cookie-based auth is expected
+
+IdentityServer handles:
+✔ Signing keys
+✔ Issuer
+✔ Token lifetime
+✔ Discovery
+✔ Key rotation
+
+For our old custom jwt(algorithm HS256 ,Shared secret key)
+
+Validation Flow:
+
+[API calls:https://localhost:7021/.well-known/openid-configuration
+
+Gets:
+
+Issuer
+
+Public keys
+
+Supported algorithms
+
+API downloads public key
+
+Verifies JWT signature
+
+Confirms:
+
+Token not expired
+
+Issuer valid
+
+Signature valid
+]
+From the token Parse we see 
+kid → key id (used for rotation)
+
+
+Example 
+Think of the token like a movie ticket 🎟️
+
+Issuer → Who issued the ticket (IdentityServer)
+
+Audience → Which movie the ticket is valid for (API)
+
+Scope → What seats / permissions you have
+
+
+Roles/Scopes/Policy
+
+Role-	Who you are
+Scope-	What you are allowed to do
+Policy-	Rule that enforces it(Scopes are added as a claim in the policy to use it)
+
+
+Blazor → /connect/authorize
+        ↓
+IdentityServer → /account/login (HTML)
+        ↓
+POST login (cookie issued)
+        ↓
+Redirect(returnUrl)
+        ↓
+/connect/authorize resumes
+        ↓
+auth-callback (Blazor)
+        ↓
+/connect/token
+identity server calls endoint
+/connect/authorize
+/connect/token
+
+🔁 Full real-world login flow (end to end)
+1️⃣ SPA
+
+Generates PKCE verifier/challenge
+
+Redirects to /connect/authorize
+
+2️⃣ AuthServer
+
+Authenticates user
+
+Returns authorization code
+
+3️⃣ SPA
+
+Sends code + verifier to /connect/token
+
+4️⃣ AuthServer
+
+Validates PKCE
+
+Creates JWT
+
+Signs JWT using Azure Key Vault
+
+Returns token
+
+5️⃣ APIs
+
+Validate JWT signature using public key
+
+Enforce scopes / roles
+
+what happening signing credentials in IdentityServer?.it is a digital signature (cryptographic signature)
+var header = new JwtHeader(signingCredentials);
+var payload = new JwtPayload(
+    issuer: "https://localhost:7021",
+    audience: "assessment_api",
+    claims: claims,
+    notBefore: DateTime.UtcNow,
+    expires: DateTime.UtcNow.AddMinutes(5)
+);
+
+var jwt = new JwtSecurityToken(header, payload);
+var token = new JwtSecurityTokenHandler().WriteToken(jwt);
+
+3️⃣ What the signing credentials look like
+var key = new RsaSecurityKey(rsaPrivateKey);
+var signingCredentials =
+    new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+
+
+✔ Private key signs
+✔ Public key verifies
+
+in api
+
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer("Bearer", options =>
+    {
+    }
+
+ Download public key from:
+
+/.well-known/openid-configuration/jwks
+
+
+Verify signature
+
+Validate scopes & roles
+
+Allow request
+
+
+✔ Private key never leaves Azure Key Vault
+✔ SPA never sees it
+✔ APIs never see it
+
+They only get:
+
+JWT
+
+Public key (via discovery endpoint)
+
+
+Public key lifecycle (Key Vault OR local)
+🔐 Private key
+
+Stored in:
+
+Local cert (.pfx) OR
+
+Azure Key Vault (HSM)
+
+🔓 Public key
+=================
+
+Derived mathematically from private key
+
+Published by IdentityServer
+
+Consumed by all protected APIs
+
+You NEVER store public keys yourself.
+
+2️⃣ Where exactly is the public key exposed?
+
+IdentityServer exposes it here:
+
+https://authserver/.well-known/openid-configuration
+
+
+Inside that JSON:
+
+"jwks_uri": "https://authserver/.well-known/openid-configuration/jwks"
+
+
+That endpoint returns:
+
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "kid": "abc123",
+      "n": "...",
+      "e": "AQAB"
+    }
+  ]
+}
+
+3️⃣ API middleware runs (AUTOMATIC)
+app.UseAuthentication();
+
+4️⃣ JwtBearerHandler does:
+
+Download JWKS (cached)
+
+Find matching kid
+
+Verify signature using public key
+
+Validate:
+
+issuer
+
+audience
+
+expiry
+
+scopes / roles
+
+✔ Only THEN controller runs
+First-time login
+Blazor
+  ↓
+/connect/authorize
+  ↓
+IdentityServer: user NOT authenticated
+  ↓
+302 Redirect → /Account/Login
+  ↓
+User enters username/password
+  ↓
+HttpContext.SignInAsync()
+  ↓
+Cookie created
+  ↓
+Redirect back to /connect/authorize
+  ↓
+Authorization code issued
+
+Subsequent login (cookie exists)
+Blazor
+  ↓
+/connect/authorize
+  ↓
+IdentityServer: user authenticated
+  ↓
+Authorization code issued
+  ↓
+Redirect to /auth-callback
+
+Interesting fact: 
+
+
+Enterprise rule
+
+Signing keys must be
+
+Centralized
+
+Protected
+
+Rotatable
+
+Auditable
+
+✅ Azure Key Vault solves all of this
+What key type to use
+Key Type-----------	Use
+RSA	-JWT signing (recommended)
+ECDSA	-Optional (advanced)
+X509 Certificate-	BEST PRACTICE ⭐
+
+We’ll use X509 cert stored in Key Vault
+
+
+
+
+
+
+
+
+
+//You can have multiple signing keys active at the same time (key rotation)
+
+Interview tips
+========
+1)“Currently we use custom JWT Bearer authentication where our API acts as the token issuer using a symmetric key.
+It’s not OAuth2 or OpenID Connect yet. For scalability and enterprise readiness, 
+we plan to migrate to an OAuth2/OIDC-based solution like IdentityServer or Azure AD.”
+2)“In Duende IdentityServer, roles are typically issued as claims in the access token rather than being defined 
+as a built-in IdentityResource. APIs map the role claim using RoleClaimType, enabling standard role-based authorization.”
+3)Audience is a logical identifier of the API, configured in IdentityServer and validated by the API to ensure the token was issued specifically for it.
+4)Scopes represent permissions granted to a client, and APIs must explicitly enforce them using authorization policies.
+5)Scopes represent permissions granted to a client, and APIs must explicitly enforce them using authorization policies.
+6)Client secrets are stored as hashes in IdentityServer, and clients always send the plain secret which is hashed and compared during authentication.
+7)OAuth tokens only contain scopes that were explicitly requested during token issuance, even if the client is allowed to request more.
+8)OAuth tokens only contain scopes that were explicitly requested during token issuance, even if the client is allowed to request more.
+9)Authorization attributes at controller and action level are cumulative. ASP.NET Core requires all authorization requirements to succeed.
+10)“Yes, PKCE uses client-side generated values, but they are not cryptographic signing keys.
+JWT signing keys are server-managed, protected in Azure Key Vault, and never exposed.”
+11)IdentityServer signs the JWT using a private key stored in Azure Key Vault.
+APIs verify the token using the public key — no decryption involved.
+12)“If not using Key Vault, IdentityServer signs JWTs using a locally loaded private key
+(in-memory or certificate). With Key Vault, signing is delegated to HSM-backed keys.”
+13)“The private key lives in Azure Key Vault. IdentityServer delegates signing to Key Vault and exposes the derived public key through its JWKS endpoint.
+APIs validate tokens using that public key, cached automatically by JwtBearer middleware.”
+14)“Key rotation introduces a new signing key pair while keeping old keys valid until issued tokens expire, ensuring zero downtime and compliance.”
+15)yes Key rotation is not replacing a key — it is adding a new key and retiring the old one later.(both private and public key).public key is derived from private key,
+so when new private key is generated new public key is also generated and old keys remain active until they expire.
+So more private keys can exist at the same time during rotation process.
+16)only one public key is generated against one private key.
+==============
+
+
+protected api
+
+Public keys are downloaded
+
+Keys are stored in memory cache
+
+✅ Token is validated
+✅ No more calls for next requests
+
+🔒 Subsequent requests
+
+For every next API call:
+
+❌ No HTTP call to IdentityServer
+
+✅ Public key fetched from in-memory cache
+
+✅ Signature verified locally
+
+
+
+Key rotation = NEW key pair
+
+New private key
+
+New public key
+
+Old keys may remain active for a while
+
+So yes — more private keys absolutely exist.
+
+What key rotation ACTUALLY means
+
+When IdentityServer rotates keys, it does this:
+
+Before rotation:
+Key A
+ ├── PrivateA (signing)
+ └── PublicA  (JWKS)
+
+After rotation:
+Key A (still valid)
+ ├── PrivateA
+ └── PublicA
+
+Key B (new)
+ ├── PrivateB (used for new tokens)
+ └── PublicB
+
+
+👉 Multiple private keys live at the same time

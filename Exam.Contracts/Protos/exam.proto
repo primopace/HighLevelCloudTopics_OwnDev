@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+option csharp_namespace = "Exam.Contracts.Protos";
+
+package exam;
+
+service ExamGrpc {
+  rpc Evaluate (ExamRequest) returns (ExamReply);
+  //server streaming
+  rpc EvaluateStream(ExamRequest)returns (stream ExamProgress);
+
+  //Bidirectional streaming
+
+rpc LiveSession(stream LiveEvent)returns (stream LiveResponse);
+}
+
+message ExamRequest
+{
+  string studentId = 1;
+  int32 totalQuestions = 2;
+  int32 correctAnswers = 3;
+}
+
+message ExamReply {
+  int32 score = 1;
+  string result = 2;
+}
+
+//streaming message
+message ExamProgress
+{
+	string message = 1;
+	int32 percentage=2;
+}
+
+//Bidirectional
+
+message LiveEvent 
+{
+string studentId = 1;
+string eventType = 2;
+string data = 3;
+}
+
+message LiveResponse
+{
+	string message = 1;
+	string action = 2;
+}
+
+
+
+
+

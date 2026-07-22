@@ -1,0 +1,755 @@
+
+Azure BlobStorage
+===============
+The URL like:
+
+https://storageaccount.blob.core.windows.net
+
+is automatically created by Azure when you create a Storage Account in Azure Blob Storage inside Microsoft Azure.
+You do not manually create this URL.
+
+Below is the complete process.
+
+1️) Create a Storage Account in Azure
+Login to Azure Portal
+Click Create Resource
+Search Storage Account
+Click Create
+
+Fill basic details:
+| Field                | Example            |
+| -------------------- | ------------------ |
+| Subscription         | Your subscription  |
+| Resource Group       | `rg-demo`          |
+| Storage Account Name | `billingstorage01` |
+| Region               | Central India      |
+| Performance          | Standard           |
+| Redundancy           | LRS                |
+
+Click Review + Create → Create
+
+2️) Azure Automatically Creates the Endpoint
+
+After deployment, Azure automatically creates the Blob endpoint:
+
+https://billingstorage01.blob.core.windows.net
+
+Structure:
+
+https://{storage-account-name}.blob.core.windows.net
+Example:
+| Storage Account  | Endpoint                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| billingstorage01 | [https://billingstorage01.blob.core.windows.net] 
+| erpdocuments     | [https://erpdocuments.blob.core.windows.net]       |
+
+
+3️) Create a Blob Container
+
+Inside the storage account:
+
+Go to Data Storage → Containers
+Click + Container
+
+Example:
+
+| Container Name | billing-pdfs |
+| Public Access | Private |
+
+Now the container URL becomes:
+
+https://billingstorage01.blob.core.windows.net/billing-pdfs
+
+4️) Upload a File (Example)
+
+If a file invoice.pdf is uploaded:
+
+https://billingstorage01.blob.core.windows.net/billing-pdfs/invoice.pdf
+
+But this won't be publicly accessible unless permissions allow it.
+
+5️) Where to Find the Endpoint in Azure
+
+Open your storage account → Endpoints section.
+
+You will see:
+| Service       | URL                                                                                             
+| ------------- | -------------------------------------------------- |
+| Blob service  | [https://billingstorage01.blob.core.windows.net]   |
+| Queue service | [https://billingstorage01.queue.core.windows.net] |
+| Table service | [https://billingstorage01.table.core.windows.net]|
+| File service  | [https://billingstorage01.file.core.windows.net]  |
+
+6️) Connection String (For SDK)
+
+In Azure Portal:
+
+Storage Account
+   ↓
+Access Keys
+   ↓
+Connection String
+
+Example:
+
+DefaultEndpointsProtocol=https;
+AccountName=billingstorage01;           --->using this directly access without identity token
+AccountKey=xxxxxxxx;
+EndpointSuffix=core.windows.net
+
+Your SDK converts this into the endpoint:
+
+https://billingstorage01.blob.core.windows.net
+
+7️) Using Endpoint with Managed Identity (Best Practice)
+
+Instead of connection string:
+
+var client = new BlobServiceClient(
+    new Uri("https://billingstorage01.blob.core.windows.net"),
+    new DefaultAzureCredential());
+
+8️) Final URL Structure
+https://{storage-account}.blob.core.windows.net/{container}/{file}
+
+Example:
+
+https://billingstorage01.blob.core.windows.net/billing-pdfs/abc123.pdf
+
+9️) Enterprise Architecture (Recommended)
+User
+  ↓
+API
+  ↓
+Azure Blob Storage SDK
+  ↓
+https://storageaccount.blob.core.windows.net
+  ↓
+Container
+  ↓
+Blob File
+
+✅ Important
+
+Even if someone knows:
+
+https://billingstorage01.blob.core.windows.net/billing-pdfs/file.pdf
+
+they cannot download it if:
+
+container is private
+no SAS token
+no Azure AD permission
+
+💡 If you want, I can also show 3 critical Azure Blob features used in enterprise systems:
+
+1️) Generate Secure Temporary Download URL (SAS Token)
+2️) Upload directly from browser to Blob without API
+3️) Store large files (GBs) using chunked upload
+
+These are very useful for your PDF upload system.
+i think we dont want the presigned url like aws
+
+
+
+Azure KeyVault
+===================
+
+
+Yes — to access Azure Key Vault using DefaultAzureCredential() you must use Azure AD authentication (now called Microsoft Entra ID).
+But you do NOT need to purchase Azure AD separately. It is included with every Azure subscription.
+
+You only pay for:
+
+Azure Key Vault
+Certificate storage / operations
+
+Azure AD itself is free for this use case.
+
+1️) What You Need
+
+Minimum components:
+| Component                            | Purpose                         |
+| ------------------------------------ | ------------------------------- |
+| Azure Subscription                   | Required for all Azure services |
+| Azure Key Vault                      | Store certificate               |
+| Microsoft Entra ID                   | Authentication                  |
+| Service Principal / Managed Identity | Allow API to access Key Vault   |
+
+
+2️) Step-by-Step Implementation
+Step 1 — Create Azure Account
+
+Go to:
+
+https://portal.azure.com
+
+Create a subscription.
+
+Azure automatically creates Microsoft Entra ID tenant.
+
+No extra purchase needed.
+
+3️) Step 2 — Create Azure Key Vault
+
+In Azure Portal:
+
+Create Resource
+   ↓
+Security
+   ↓
+Key Vault
+
+Example:
+
+Name: mycompany-kv
+Region: Central India
+Pricing: Standard
+
+After creation you get URL:
+
+https://mycompany-kv.vault.azure.net
+
+4️) Step 3 — Upload Signing Certificate
+
+Open:
+
+Key Vault
+   ↓
+Certificates
+   ↓
+Generate / Import
+
+Upload your IdentityServer certificate:
+
+identityserver-signing-cert
+
+File type:
+
+.pfx
+5️) Step 4 — Create App Registration (Service Principal)
+
+Open:
+
+Microsoft Entra ID
+   ↓
+App registrations
+   ↓
+New registration
+
+Example:
+
+Name: identityserver-api
+
+After creation you get:
+
+Application (client) ID
+Directory (tenant) ID
+6️) Step 5 — Create Client Secret
+
+Inside App Registration:
+
+Certificates & secrets
+   ↓
+New client secret
+
+Copy the secret.
+
+You now have:
+
+TenantId
+ClientId
+ClientSecret
+
+7️) Step 6 — Give Key Vault Permission
+
+Go to:
+
+Key Vault
+   ↓
+Access control (IAM)
+   ↓
+Add role assignment
+
+Add role:
+
+Key Vault Secrets User
+
+or
+
+Key Vault Administrator
+
+Select your App Registration.
+
+8️) Step 7 — Configure Your .NET API
+
+Install packages:
+
+Azure.Identity
+Azure.Security.KeyVault.Certificates
+
+9️) Step 8 — Store Credentials in appsettings
+{
+ "AzureAd": {
+   "TenantId": "xxxxxxxx",
+   "ClientId": "xxxxxxxx",
+   "ClientSecret": "xxxxxxxx"
+ },
+ "KeyVault": {
+   "Url": "https://mycompany-kv.vault.azure.net/"
+ }
+}
+
+10)Step 9 — Code to Access Certificate
+using Azure.Identity;
+using Azure.Security.KeyVault.Certificates;
+
+var credential = new ClientSecretCredential(
+    tenantId,
+    clientId,
+    clientSecret);
+
+var client = new CertificateClient(
+    new Uri("https://mycompany-kv.vault.azure.net/"),
+    credential);
+
+var cert = await client.GetCertificateAsync("identityserver-signing-cert");
+
+1️1) Use in IdentityServer
+builder.Services.AddIdentityServer()
+    .AddSigningCredential(certificate);
+
+1️2) Production Best Practice
+
+If your API runs on Azure services like:
+
+Azure App Service
+Azure Kubernetes Service
+Azure Virtual Machines
+
+Use Managed Identity instead of ClientSecret.
+
+Then your code becomes simpler:
+
+var client = new CertificateClient(
+    new Uri("https://mycompany-kv.vault.azure.net/"),
+    new DefaultAzureCredential());
+
+No secrets needed.
+
+1️3) Cost (Approx)
+Service	Cost
+Azure AD	Free
+Key Vault Standard	~$0.03 per 10k operations
+Certificate storage	very low
+
+Usually $1–$5/month for small apps.
+
+✅ Final Answer
+
+Yes, Azure AD (Microsoft Entra ID) is required, but:
+
+It is automatically included with Azure
+You do not need to purchase it separately
+
+Your process:
+
+IdentityServer
+    ↓
+Azure AD authentication
+    ↓
+Azure Key Vault
+    ↓
+Get signing certificate
+
+💡 If you want, I can also show a complete production setup used by companies:
+
+IdentityServer
+API
+KeyVault
+Blob Storage
+Managed Identity
+Azure App Service
+
+
+
+
+When Key Vault Is Actually Used
+
+In enterprise systems Key Vault typically stores:
+
+| Secret                        | Example         |
+| ----------------------------- | --------------- |
+| Database connection string    | SQL Server      |
+| Redis connection string       | Cache           |
+| Service Bus connection string | Messaging       |
+| External API keys             | Payment gateway |
+| JWT signing keys              | Identity        |
+
+But Blob Storage usually uses Managed Identity instead.
+
+
+Recommended Enterprise Setup
+API
+ ↓
+Managed Identity
+ ↓
+Azure AD
+ ↓
+Blob Storage
+
+No connection strings.
+
+Key Vault used for:
+
+SQL
+Redis
+Service Bus
+External APIs
+
+
+
+Name: AzureStorageConnectionString
+Value: DefaultEndpointsProtocol=https;AccountName=xxx;AccountKey=xxx;EndpointSuffix=core.windows.net
+
+{
+  "KeyVault": {
+    "VaultUrl": "https://your-keyvault-name.vault.azure.net/"
+  },
+  "AzureStorage": {
+    "ContainerName": "billing-pdfs"
+  }
+}
+
+
+dotnet add package Azure.Identity
+dotnet add package Azure.Security.KeyVault.Secrets
+dotnet add package Azure.Extensions.AspNetCore.Configuration.Secrets
+dotnet add package Azure.Storage.Blobs
+
+
+var keyVaultUrl = builder.Configuration["KeyVault:VaultUrl"];
+
+builder.Configuration.AddAzureKeyVault(
+    new Uri(keyVaultUrl),
+    new DefaultAzureCredential()
+);
+
+
+Application
+     ↓
+DefaultAzureCredential()
+     ↓
+Azure AD Identity Token
+     ↓
+Azure KeyVault
+     ↓
+Secret Returned
+
+API Service
+   ↓
+Managed Identity
+   ↓
+Azure AD Authentication
+   ↓
+Key Vault
+   ↓
+Retrieve Storage Connection String
+   ↓
+Blob Storage Access
+
+
+var blobServiceClient = new BlobServiceClient(
+    new Uri("https://storageaccount.blob.core.windows.net"),
+    new DefaultAzureCredential());
+
+
+    var blob = blobServiceClient
+    .GetBlobContainerClient("billing-pdfs")
+    .GetBlobClient("file.pdf");
+
+var download = await blob.DownloadStreamingAsync();
+
+
+GET https://storageaccount.blob.core.windows.net/billing-pdfs/file.pdf
+Authorization: Bearer <AzureADToken>
+
+| Check           | Description            |
+| --------------- | ---------------------- |
+| Azure AD Token  | verifies identity      |
+| RBAC Permission | verifies access rights |
+
+DefaultAzureCredential()
+===
+Order of authentication:
+
+Environment Variables
+Managed Identity (Azure App Service / VM / AKS)
+Visual Studio Login
+Azure CLI Login
+Azure Developer CLI
+
+
+| Feature                  | Connection String | DefaultAzureCredential |
+| ------------------------ | ----------------- | ---------------------- |
+| Secret stored in code    | ✔ Yes             | ❌ No                   |
+| Uses AccountKey          | ✔ Yes             | ❌ No                   |
+| Uses Azure AD            | ❌ No              | ✔ Yes                  |
+| Uses RBAC                | ❌ No              | ✔ Yes                  |
+| Recommended by Microsoft | ❌                 | ✔                      |
+
+
+When Using DefaultAzureCredential()
+
+You must give your API permission.
+
+In Azure Portal:
+
+Storage Account
+   ↓
+Access Control (IAM)
+   ↓
+Add Role Assignment
+
+Role:
+
+Storage Blob Data Contributor
+
+Assign to:
+
+App Service Managed Identity
+
+
+
+When Key Vault Is Actually Used
+
+In enterprise systems Key Vault typically stores:
+| Secret                        | Example         |
+| ----------------------------- | --------------- |
+| Database connection string    | SQL Server      |
+| Redis connection string       | Cache           |
+| Service Bus connection string | Messaging       |
+| External API keys             | Payment gateway |
+| JWT signing keys              | Identity        |
+
+
+But Blob Storage usually uses Managed Identity instead.
+
+
+To access the secret they must have:
+
+1️⃣ Azure authentication
+2️⃣ Permission to Key Vault
+
+2️⃣ Required Security Layers
+
+Access to Key Vault requires both:
+
+| Layer          | Requirement                |
+| -------------- | -------------------------- |
+| Authentication | Login to Azure             |
+| Authorization  | Permission to read secrets |
+
+Without both → access denied.
+
+
+Who Can Actually Read the Secret
+
+Only identities with Key Vault permission like:
+
+Secrets → Get
+
+Example identities:
+
+Azure App Service Managed Identity
+Azure VM Managed Identity
+Service Principal
+Azure user with RBAC permission
+
+Configured in:
+
+Key Vault
+   ↓
+Access Control (IAM)
+
+or
+
+Key Vault
+   ↓
+Access Policies
+4️⃣ Example Secure Flow
+API
+ ↓
+Managed Identity
+ ↓
+Azure AD authentication
+ ↓
+Key Vault permission check
+ ↓
+Secret returned
+
+If permission is missing:
+
+403 Forbidden
+
+
+
+Typical Azure AD Authentication Flow
+Application
+     ↓
+Azure AD login
+     ↓
+Azure AD verifies identity
+     ↓
+JWT Access Token issued
+     ↓
+Application calls Azure service
+     ↓
+Service validates JWT token
+
+
+
+| Feature           | Custom JWT      | Azure AD       |
+| ----------------- | --------------- | -------------- |
+| Token format      | JWT             | JWT            |
+| Identity provider | Your API        | Azure AD       |
+| User management   | You manage      | Azure manages  |
+| Token signing     | Your secret key | Microsoft keys |
+| Role management   | Manual          | Built-in RBAC  |
+| SSO support       | No              | Yes            |
+
+
+Azure keyvault more detail
+==========================
+1️⃣ Why IdentityServer Uses a Signing Certificate
+
+When IdentityServer issues a JWT token, it must digitally sign the token so APIs can verify it.
+
+Example JWT:
+
+Header.Payload.Signature
+
+The Signature is created using a private key from a certificate.
+
+Flow:
+
+Client
+   ↓
+IdentityServer
+   ↓
+Token created
+   ↓
+Token signed with private key
+   ↓
+Client receives JWT
+
+APIs validate the token using the public key.
+
+2️⃣ Problem With Local Certificates
+
+If you store certificates like this:
+
+certs/identityserver.pfx
+
+Problems:
+
+Secret stored in server
+Hard to rotate
+Devs may access it
+Multiple servers must sync
+3️⃣ Enterprise Solution: Azure Key Vault
+
+Store the certificate in:
+
+Azure Key Vault
+
+Then IdentityServer loads it securely.
+
+IdentityServer
+     ↓
+Azure AD authentication
+     ↓
+Key Vault
+     ↓
+Retrieve signing certificate
+4️⃣ Typical Architecture
+Client
+   ↓
+IdentityServer
+   ↓
+Get signing certificate
+   ↓
+Azure Key Vault
+   ↓
+JWT signed
+   ↓
+API
+5️⃣ Example: Storing Certificate in Key Vault
+
+In Azure:
+
+Key Vault
+   Certificates
+      identityserver-signing-cert
+6️⃣ .NET Code Example
+
+Install package:
+
+Azure.Security.KeyVault.Certificates
+Azure.Identity
+
+Code:
+
+using Azure.Identity;
+using Azure.Security.KeyVault.Certificates;
+
+var client = new CertificateClient(
+    new Uri("https://myvault.vault.azure.net/"),
+    new DefaultAzureCredential());
+
+KeyVaultCertificateWithPolicy cert =
+    await client.GetCertificateAsync("identityserver-signing-cert");
+
+Then convert to X509Certificate2.
+
+7️⃣ Add Signing Credential in IdentityServer
+builder.Services.AddIdentityServer()
+    .AddSigningCredential(certificate);
+
+Now IdentityServer signs tokens using Key Vault certificate.
+
+8️⃣ Extra Security Benefit
+
+Key Vault provides:
+
+automatic certificate rotation
+audit logs
+RBAC access
+HSM backed keys
+
+Supported by:
+
+Azure App Service
+Azure Kubernetes Service
+Azure Virtual Machines
+9️⃣ Even More Secure Option (Large Enterprises)
+
+Instead of downloading the certificate, IdentityServer can sign tokens directly using Key Vault keys.
+
+IdentityServer
+     ↓
+Key Vault crypto API
+     ↓
+Sign JWT
+
+Private key never leaves Key Vault.
+
+✅ Final Answer
+
+Yes — in production systems:
+
+IdentityServer signing certificates
+Storage connection strings
+API secrets
+
+are all stored in Azure Key Vault.

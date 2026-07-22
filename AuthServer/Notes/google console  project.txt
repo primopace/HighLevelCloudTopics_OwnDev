@@ -1,0 +1,195 @@
+
+
+
+
+Blazor App
+   ↓  (OIDC Authorization Code + PKCE)
+IdentityServer
+   ↓  (External Challenge)
+Google
+   ↓
+IdentityServer
+   ↓  (JWT signed via Key Vault cert)
+Blazor App
+   ↓
+Assessment API
+
+
+
+
+
+
+Blazor Login button
+   ↓
+/connect/authorize (IdentityServer)
+   ↓
+Not logged in?
+   ↓
+/account/login  (your API HTML)
+   ↓
+Login with Google
+   ↓
+Google OAuth
+   ↓
+IdentityServer issues auth code
+   ↓
+redirect → /auth-callback (Blazor)
+   ↓
+token exchange (code → tokens)
+
+
+
+Blazor Admin UI
+   ↓
+/connect/authorize
+   ↓
+IdentityServer
+   ↓
+Google Login Page
+   ↓
+/signin-google
+   ↓
+ExternalController.Callback
+   ↓
+ASP.NET Identity user
+   ↓
+IdentityServer issues JWT + Refresh token
+   ↓
+Blazor receives tokens
+
+
+
+✅ STEP 1: Create the Google Cloud Project
+
+You’re on New Project page → do this:
+
+Project name:
+👉 Use something meaningful, e.g.
+
+assessment-auth
+
+
+Parent resource:
+👉 Keep No organization (correct for personal / learning)
+
+👉 Click Create
+
+
+✅ STEP 2: Select the created project
+
+After creation:
+
+Look at top header → project dropdown
+
+Make sure your new project is selected
+
+
+STEP 3: Configure OAuth Consent Screen (MANDATORY)
+
+Left menu ☰ →
+APIs & Services → OAuth consent screen
+
+
+✅ STEP 1: App Information (this screen)
+App name
+
+Use something clean and professional:
+
+Assessment Platform
+
+
+This is what users will see on Google’s consent popup.
+
+User support email
+
+Select your Gmail ID from the dropdown.
+
+This is mandatory.
+
+👉 Click Next
+
+
+STEP 2: Audience
+
+You’ll see something like:
+
+Who can use this app?
+
+Choose:
+
+✅ External
+
+Why:
+
+You’re using normal Gmail accounts
+
+Not restricted to a Google Workspace org
+
+👉 Click Next
+
+✅ STEP 3: Contact Information
+
+Enter your Gmail ID
+
+This is for Google to contact you (rarely used)
+
+👉 Click Next
+
+
+✅ STEP 3: Contact Information
+
+Enter your Gmail ID
+
+This is for Google to contact you (rarely used)
+
+👉 Click Next
+
+
+
+
+⚠️ VERY IMPORTANT (Don’t skip)
+
+After creation:
+
+Go to Audience
+
+Scroll to Test users
+
+Add your Gmail ID
+
+Save
+
+Without this → Google will block login for unverified apps.
+
+
+
+✅ What happens next (architecture clarity)
+
+At this point:
+
+✔ Google knows your app
+✔ Consent screen exists
+✔ IdentityServer can redirect users to Google
+✔ Google can redirect back to /signin-google
+
+Nothing else is needed on Google side yet.
+
+
+➡️ NEXT STEP (do this now)
+
+Go to:
+
+Clients → Create client
+
+And create:
+
+OAuth Client ID
+
+Type: Web application
+Client name: Assessment Portal Auth
+Redirect URI:
+
+https://localhost:7021/signin-google
+
+
+Download the json you will get {"web":{"client_id":"679040267131-mvor514qv20s5ddd2qdls842rd03vcn8.apps.googleusercontent.com","project_id":"assessment-auth-486917","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["https://localhost:7021/signin-google"]}}
