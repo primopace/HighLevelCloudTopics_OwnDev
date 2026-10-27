@@ -69,6 +69,8 @@ builder.Services
 // --------------------
 builder.Services.AddIdentityServer(options =>
 {
+    //options.UserInteraction.LoginUrl = "/account/signin";
+    //options.UserInteraction.LogoutUrl = "/account/signout";
     options.Events.RaiseErrorEvents = true;
     options.Events.RaiseFailureEvents = true;
     options.Events.RaiseInformationEvents = true;
