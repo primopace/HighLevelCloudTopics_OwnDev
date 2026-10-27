@@ -1,11 +1,20 @@
 <Solution>
   <Folder Name="/SharedReferences/">
+    <File Path="SharedReferences/additional.txt" />
     <File Path="SharedReferences/azureblobandkeyvault.txt" />
+    <File Path="SharedReferences/Azurekeyvaultsame_Cert_2.txt" />
+    <File Path="SharedReferences/AzureKeyvault_cert.txt" />
+    <File Path="SharedReferences/AzureKeyvault_RSA.txt" />
     <File Path="SharedReferences/DDDandEventDriven.txt" />
     <File Path="SharedReferences/Docker and rabbitmq.txt" />
     <File Path="SharedReferences/DockerCommands.txt" />
+    <File Path="SharedReferences/google console  project.txt" />
     <File Path="SharedReferences/grpc notes.txt" />
+    <File Path="SharedReferences/Identity jwt json flow.txt" />
+    <File Path="SharedReferences/Identity server JWT notes.txt" />
+    <File Path="SharedReferences/rough.txt" />
     <File Path="SharedReferences/SagaPattern.txt" />
+    <File Path="SharedReferences/SSO.txt" />
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/AssessmentService/">
@@ -42,4 +51,7 @@
     <Project Path="Contracts/Contracts.csproj" Id="46c964d4-92cd-422f-89b6-e2131e193db3" />
     <Project Path="Exam.Contracts/Exam.Contracts.csproj" Id="ff90f710-1093-4c46-972c-d5927890ff9a" />
   </Folder>
+  <Project Path="MessagingConsumer/MessagingConsumer.csproj" />
+  <Project Path="MessagingPublisher/MessagingPublisher.csproj" />
+  <Project Path="SharedContracts/SharedContracts.csproj" />
 </Solution>
